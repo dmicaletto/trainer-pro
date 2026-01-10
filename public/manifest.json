@@ -1,20 +1,20 @@
 {
-  "name": "Davide's Gym App",
-  "short_name": "My Gym App",
-  "start_url": "./training-laura.html",
+  "name": "Gym App",
+  "short_name": "Gym App",
+  "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0d1117",
-  "theme_color": "#0d1117",
-  "description": "Piano di allenamento personale di Laura Corridoni",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "description": "Il tuo diario di allenamento",
   "icons": [
     {
-      "src": "./images/laura_icon.png",
+      "src": "./icon-192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any maskable"
     },
     {
-      "src": "./images/laura_icon.png",
+      "src": "./icon-512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any maskable"
