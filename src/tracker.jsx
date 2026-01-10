@@ -44,25 +44,21 @@ import {
   AlertCircle,
   Check,
   TrendingUp,
-  Activity
+  Activity,
+  History,
+  Filter
 } from 'lucide-react';
 
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfig = JSON.parse(localStorage.getItem('firebase_config') || '{}');
 const safeConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
-const finalConfig = Object.keys(safeConfig).length > 0 ? safeConfig : {
-    apiKey: "AIzaSyCfTXY1foD8Dr9UxRNzLeOu680aNtIw4TA",
-    authDomain: "training-c0b76.firebaseapp.com",
-    projectId: "training-c0b76",
-    storageBucket: "training-c0b76.firebasestorage.app",
-    messagingSenderId: "149618028951",
-    appId: "1:149618028951:web:03756bdf1273a4521954d2"
-};
 
-const app = initializeApp(finalConfig);
+const app = initializeApp(safeConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const APP_ID = finalConfig.projectId || 'default-app';
+
+// ID App per la struttura del DB (dal tuo vecchio file)
+const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
 
 // --- DATI INIZIALI (Template) ---
 const INITIAL_WORKOUT_DAYS = {
@@ -137,31 +133,104 @@ const formatDuration = (seconds) => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
-// --- COMPONENTI GRAFICI SVG ---
-const BarChart = ({ data }) => {
-    if (!data || data.length === 0) return <div className="text-gray-500 text-xs text-center py-4">Nessun dato</div>;
+// --- COMPONENTI GRAFICI SVG CUSTOM ---
+
+const BarChart = ({ data, title, color = "blue" }) => {
+    if (!data || data.length === 0) return <div className="text-gray-500 text-xs text-center py-4 bg-gray-900 rounded-xl border border-gray-800">Nessun dato per {title}</div>;
+    
     const maxVal = Math.max(...data.map(d => d.value));
+    const chartHeight = 100;
+    
     return (
-        <div className="flex items-end justify-between h-32 w-full gap-2 pt-4 pb-2">
-            {data.map((d, i) => (
-                <div key={i} className="flex flex-col items-center flex-1 group relative">
-                    <div 
-                        className="w-full bg-blue-600/50 rounded-t-sm hover:bg-blue-500 transition-all" 
-                        style={{ height: `${(d.value / maxVal) * 100}%` }}
-                    >
-                        <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded shadow pointer-events-none whitespace-nowrap z-10">
-                            {d.value} Kg
-                        </div>
-                    </div>
-                    <span className="text-[10px] text-gray-500 mt-1 rotate-0 truncate w-full text-center">{d.label}</span>
+        <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800">
+            <h4 className="text-sm font-bold text-gray-400 mb-4 uppercase tracking-wider flex items-center justify-between">
+                {title}
+                <span className="text-xs font-normal normal-case text-gray-500">Max: {maxVal}</span>
+            </h4>
+            <div className="flex items-end justify-between h-[100px] w-full gap-2 relative mt-2">
+                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
+                    <div className="border-t border-gray-500 w-full"></div>
+                    <div className="border-t border-gray-500 w-full"></div>
+                    <div className="border-t border-gray-500 w-full"></div>
                 </div>
-            ))}
+
+                {data.map((d, i) => (
+                    <div key={i} className="flex flex-col items-center flex-1 group relative h-full justify-end z-10">
+                        <div 
+                            className={`w-full max-w-[12px] sm:max-w-[20px] rounded-t-sm transition-all duration-700 ease-out ${color === 'green' ? 'bg-green-600/70 hover:bg-green-500' : 'bg-blue-600/70 hover:bg-blue-500'}`}
+                            style={{ height: `${maxVal > 0 ? (d.value / maxVal) * 100 : 0}%` }}
+                        >
+                             {/* Tooltip on hover */}
+                            <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded shadow-lg border border-gray-700 pointer-events-none whitespace-nowrap z-20">
+                                {d.value}
+                            </div>
+                        </div>
+                        <span className="text-[8px] sm:text-[9px] text-gray-500 mt-2 rotate-0 truncate w-full text-center font-mono">{d.label}</span>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };
 
+const LineChart = ({ data, title }) => {
+     if (!data || data.length < 2) return <div className="text-gray-500 text-xs text-center py-4 bg-gray-900 rounded-xl border border-gray-800">Dati insufficienti per il grafico di progressione (servono almeno 2 allenamenti).</div>;
+
+     const maxVal = Math.max(...data.map(d => d.value));
+     const minVal = Math.min(...data.map(d => d.value)) * 0.9;
+     const range = maxVal - minVal;
+     
+     // Genera punti SVG
+     const points = data.map((d, i) => {
+         const x = (i / (data.length - 1)) * 100;
+         const y = 100 - ((d.value - minVal) / range) * 100;
+         return `${x},${y}`;
+     }).join(' ');
+
+     return (
+        <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800">
+            <h4 className="text-sm font-bold text-gray-400 mb-4 uppercase tracking-wider flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-green-500" /> {title}
+            </h4>
+            <div className="relative h-[120px] w-full mt-2 pr-2">
+                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
+                     {/* Griglia */}
+                     <line x1="0" y1="0" x2="100" y2="0" stroke="#374151" strokeWidth="0.5" strokeDasharray="2" opacity="0.5" />
+                     <line x1="0" y1="50" x2="100" y2="50" stroke="#374151" strokeWidth="0.5" strokeDasharray="2" opacity="0.5" />
+                     <line x1="0" y1="100" x2="100" y2="100" stroke="#374151" strokeWidth="0.5" strokeDasharray="2" opacity="0.5" />
+                     
+                     {/* Linea */}
+                     <polyline 
+                        points={points} 
+                        fill="none" 
+                        stroke="#10b981" 
+                        strokeWidth="2" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                     />
+                     {/* Punti */}
+                     {data.map((d, i) => {
+                         const x = (i / (data.length - 1)) * 100;
+                         const y = 100 - ((d.value - minVal) / range) * 100;
+                         return (
+                             <circle key={i} cx={x} cy={y} r="3" fill="#10b981" className="hover:r-4 transition-all" />
+                         );
+                     })}
+                 </svg>
+                 {/* Etichette X (Solo prima e ultima per pulizia) */}
+                 <div className="flex justify-between text-[9px] text-gray-500 mt-2 font-mono">
+                     <span>{data[0].label}</span>
+                     <span>{data[data.length - 1].label}</span>
+                 </div>
+            </div>
+        </div>
+     );
+};
+
+
 export default function App() {
   const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null); // NUOVO: Stato profilo
   const [loading, setLoading] = useState(true);
   
   // Navigazione
@@ -180,46 +249,54 @@ export default function App() {
   const [finishModalOpen, setFinishModalOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const scrollContainerRef = useRef(null);
-
-  // Notifiche (Toast)
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  // Storico & Progressione
+  // Storico & Analisi
   const [historyLogs, setHistoryLogs] = useState([]);
-  const [chartData, setChartData] = useState([]); // Per il grafico
-  const [selectedProgressionExercise, setSelectedProgressionExercise] = useState('all');
+  const [weeklyVolume, setWeeklyVolume] = useState([]);
+  const [monthlyVolume, setMonthlyVolume] = useState([]);
+  const [progressionData, setProgressionData] = useState([]); // Dati per grafico linea
+  const [selectedProgressionDay, setSelectedProgressionDay] = useState('Giorno 1'); // Filtro per grafico
 
   // Auth Form
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // --- PERSISTENZA FIREBASE (DEFAULTS) ---
+  // --- FUNZIONI DI SUPPORTO ---
   
-  // Carica i defaults da Firestore
+  // Carica il profilo utente da Firestore
+  const fetchUserProfile = async (userId) => {
+    if (!userId || userId === 'mock-user') {
+        // Profilo Mock
+        setUserProfile({ name: "Davide", surname: "Micaletto", weight: 68, age: 52 });
+        return;
+    }
+    try {
+        const docRef = doc(db, `artifacts/${APP_ID}/users/${userId}/profiles_meta`, 'data');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            console.log("[DEBUG] Profilo caricato:", docSnap.data());
+            setUserProfile(docSnap.data());
+        }
+    } catch (e) {
+        console.error("Errore caricamento profilo:", e);
+    }
+  };
+
   const fetchUserDefaults = async (userId) => {
+      if (!userId || userId === 'mock-user') return {};
       try {
           const docRef = doc(db, `artifacts/${APP_ID}/users/${userId}/data`, 'workout_defaults');
           const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-              console.log("[DEBUG] Defaults loaded from Firestore");
-              return docSnap.data();
-          }
-      } catch (e) {
-          console.error("Error loading defaults from Firestore", e);
-      }
-      return {};
+          return docSnap.exists() ? docSnap.data() : {};
+      } catch (e) { return {}; }
   };
 
-  // Salva un singolo default su Firestore (merge)
   const saveDefaultToFirestore = async (userId, exerciseId, setIndex, field, value) => {
+      if (!userId || userId === 'mock-user') return;
       try {
           const docRef = doc(db, `artifacts/${APP_ID}/users/${userId}/data`, 'workout_defaults');
-          // Costruiamo la chiave nested per il merge (es. "d1_e1.0.weight": 50)
-          // Nota: Firestore update con dot notation richiede che l'oggetto genitore esista.
-          // Per semplicità qui scarichiamo, aggiorniamo e risalviamo tutto l'oggetto o usiamo set con merge.
-          // Un approccio più robusto è leggere prima.
-          
           const currentDefaults = await fetchUserDefaults(userId);
           
           if (!currentDefaults[exerciseId]) currentDefaults[exerciseId] = [];
@@ -228,19 +305,14 @@ export default function App() {
           currentDefaults[exerciseId][setIndex][field] = value;
           
           await setDoc(docRef, currentDefaults, { merge: true });
-          console.log(`[DEBUG] Default saved to Firestore: ${exerciseId} set ${setIndex} ${field}=${value}`);
-      } catch (e) {
-          console.error("Error saving default to Firestore", e);
-      }
+      } catch (e) { console.error(e); }
   };
 
-  // --- NOTIFICHE ---
   const showToast = (message, type = 'success') => {
       setToast({ show: true, message, type });
       setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
 
-  // --- HELPER FUNCTIONS ---
   const calculateTotalVolume = (session) => {
       if (!session) return 0;
       let total = 0;
@@ -257,25 +329,21 @@ export default function App() {
   const openRestTimer = (seconds) => {
       setRestTimer({ isOpen: true, timeLeft: seconds, totalTime: seconds });
   };
-
   const closeRestTimer = () => {
       setRestTimer({ isOpen: false, timeLeft: 0, totalTime: 0 });
   };
-
   const scrollToExercise = (index) => {
       if (scrollContainerRef.current) {
           const container = scrollContainerRef.current;
           const child = container.children[index];
-          if (child) {
-            child.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-          }
+          if (child) child.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
   };
 
-  // --- CORE LOGIC ---
+  // --- LOGICA DI NAVIGAZIONE E AGGIORNAMENTO ---
+
   const handleSetCompletion = (exerciseIndex, setIndex) => {
       if (!activeSession) return;
-
       const exercise = activeSession.exercises[exerciseIndex];
       const set = exercise.sets[setIndex];
 
@@ -285,7 +353,6 @@ export default function App() {
       updatedSession.exercises[exerciseIndex].sets[setIndex].completed = true;
       setActiveSession(updatedSession);
       saveSessionLocally(updatedSession);
-      
       if (navigator.vibrate) navigator.vibrate(50);
 
       const isLastSetOfExercise = setIndex === exercise.sets.length - 1;
@@ -314,7 +381,6 @@ export default function App() {
       setActiveSession(updatedSession);
       saveSessionLocally(updatedSession);
 
-      // Salva come default su Firestore (con debounce sarebbe meglio, ma per ora diretto)
       if (user && user.uid !== 'mock-user') {
           saveDefaultToFirestore(user.uid, exerciseId, setIndex, field, Number(value));
       }
@@ -329,55 +395,33 @@ export default function App() {
           }));
       }
   };
+  const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
 
-  const clearLocalSession = () => {
-      if (user) localStorage.removeItem(`active_session_${user.uid}`);
-  };
-
-  // --- HANDLERS ---
+  // --- HANDLERS UI ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setAuthError('');
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err) {
+    try { await signInWithEmailAndPassword(auth, email, password); } 
+    catch (err) {
       if(err.code === 'auth/network-request-failed' || err.message.includes('iframe')) {
           alert("Login bloccato in anteprima. Attivo modalità test.");
           setUser({ uid: "test-user", email: email || "test@test.com", displayName: "Test User" });
-      } else {
-          setAuthError('Errore login: Email o password errati.');
-      }
+      } else { setAuthError('Errore login: Email o password errati.'); }
     }
   };
-
-  const handleLogout = async () => {
-    if (confirm("Vuoi davvero uscire?")) {
-        await signOut(auth);
-        setUser(null);
-        setIsMenuOpen(false);
-    }
-  };
+  const handleLogout = async () => { if (confirm("Uscire?")) { await signOut(auth); setUser(null); setIsMenuOpen(false); } };
 
   const handleStartWorkout = async () => {
       const dayTemplate = workoutData[activeDayId];
       let sessionData = JSON.parse(JSON.stringify(dayTemplate));
-
       setLoading(true);
-      
-      // Carica Default da Firestore
       if (user && user.uid !== 'mock-user') {
           const userDefaults = await fetchUserDefaults(user.uid);
           sessionData.exercises = sessionData.exercises.map(ex => {
               if (userDefaults[ex.id]) {
                   const mergedSets = ex.sets.map((set, idx) => {
                       const savedSet = userDefaults[ex.id][idx];
-                      if (savedSet) {
-                          return {
-                              ...set,
-                              weight: savedSet.weight || set.weight,
-                              reps: savedSet.reps || set.reps
-                          };
-                      }
+                      if (savedSet) return { ...set, weight: savedSet.weight || set.weight, reps: savedSet.reps || set.reps };
                       return set;
                   });
                   return { ...ex, sets: mergedSets };
@@ -386,21 +430,19 @@ export default function App() {
           });
       }
       setLoading(false);
-
       setActiveSession(sessionData);
       setStartTime(new Date());
       setView('active-workout');
       setFinishModalOpen(false);
       setRating(0);
       saveSessionLocally(sessionData);
-      showToast("Allenamento Iniziato", 'info');
+      showToast("Buon allenamento!", 'info');
   };
 
   const handleSaveAndExit = async () => {
       const totalTonnage = calculateTotalVolume(activeSession);
       const endTime = new Date();
       const durationSeconds = sessionTimer;
-      
       const workoutLog = {
           date: startTime ? new Date(startTime).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           dayName: activeSession.name,
@@ -415,16 +457,11 @@ export default function App() {
 
       if (user.uid !== 'mock-user' && user.uid !== 'test-user') {
           try {
+              // Salvataggio nella collezione originale per compatibilità
               await addDoc(collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`), workoutLog);
-              showToast("Allenamento salvato!", 'success');
-          } catch (e) {
-              console.error("Save error:", e);
-              showToast("Errore salvataggio!", 'error');
-              return; 
-          }
-      } else {
-          showToast("Salvato (Mock)", 'success');
-      }
+              showToast("Salvato con successo!", 'success');
+          } catch (e) { console.error("Save error:", e); showToast("Errore salvataggio!", 'error'); return; }
+      } else { showToast("Salvato (Mock)", 'success'); }
       
       clearLocalSession();
       setActiveSession(null);
@@ -433,27 +470,16 @@ export default function App() {
       setView('dashboard');
   };
 
-  const handleCancelWorkout = () => {
-      if(!confirm("Annullare l'allenamento?")) return;
-      setActiveSession(null);
-      clearLocalSession();
-      setView('dashboard');
-  };
+  const handleCancelWorkout = () => { if(!confirm("Annullare?")) return; setActiveSession(null); clearLocalSession(); setView('dashboard'); };
 
   // --- EFFETTI ---
   useEffect(() => {
     let unsubscribe = () => {};
-    const activateMockMode = () => { 
-        setUser({ uid: "mock-user", email: "preview@gym.app", displayName: "Preview User" }); 
-        setLoading(false); 
-    };
-    
+    const activateMockMode = () => { setUser({ uid: "mock-user", email: "preview@gym.app", displayName: "Preview User" }); setLoading(false); };
     const isCanvasPreview = window.location.hostname.includes('googleusercontent.com') || window.self !== window.top;
     if (isCanvasPreview) {
         const timer = setTimeout(() => { if (loading) activateMockMode(); }, 2000); 
-        const initAuth = async () => {
-            try { unsubscribe = onAuthStateChanged(auth, (u) => { setUser(u); setLoading(false); }, () => activateMockMode()); } catch { activateMockMode(); }
-        };
+        const initAuth = async () => { try { unsubscribe = onAuthStateChanged(auth, (u) => { setUser(u); setLoading(false); }, () => activateMockMode()); } catch { activateMockMode(); } };
         initAuth();
         return () => { clearTimeout(timer); unsubscribe(); };
     } else {
@@ -462,70 +488,110 @@ export default function App() {
     }
   }, []);
 
+  // Fetch Profilo
+  useEffect(() => {
+      if(user) fetchUserProfile(user.uid);
+  }, [user]);
+
+  // Restore Session
+  useEffect(() => {
+      if (user && view === 'dashboard' && !activeSession) {
+          const saved = localStorage.getItem(`active_session_${user.uid}`);
+          if (saved) {
+              try {
+                  const parsed = JSON.parse(saved);
+                  if (confirm(`Riprendere "${parsed.session.name}"?`)) {
+                      setActiveSession(parsed.session);
+                      setStartTime(new Date(parsed.startTime));
+                      setSessionTimer(parsed.timer || 0);
+                      setView('active-workout');
+                  } else { clearLocalSession(); }
+              } catch (e) { clearLocalSession(); }
+          }
+      }
+  }, [user]);
+
+  // Timers
   useEffect(() => {
       let interval;
       if (view === 'active-workout' && !finishModalOpen) {
-          interval = setInterval(() => {
-              setSessionTimer(t => {
-                  const newVal = t + 1;
-                  if (newVal % 5 === 0 && activeSession) saveSessionLocally(activeSession); 
-                  return newVal;
-              });
-          }, 1000);
+          interval = setInterval(() => { setSessionTimer(t => { const newVal = t + 1; if (newVal % 5 === 0 && activeSession) saveSessionLocally(activeSession); return newVal; }); }, 1000);
       }
       return () => clearInterval(interval);
   }, [view, finishModalOpen]);
 
   useEffect(() => {
       let interval;
-      if (restTimer.isOpen && restTimer.timeLeft > 0) {
-          interval = setInterval(() => {
-              setRestTimer(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 }));
-          }, 1000);
-      }
+      if (restTimer.isOpen && restTimer.timeLeft > 0) { interval = setInterval(() => { setRestTimer(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 })); }, 1000); }
+      else if (restTimer.isOpen && restTimer.timeLeft <= 0 && navigator.vibrate) { navigator.vibrate([200, 100, 200]); }
       return () => clearInterval(interval);
-  }, [restTimer.isOpen]);
+  }, [restTimer.isOpen, restTimer.timeLeft]);
 
-  // Caricamento Storico & Analisi
+  // --- LOGICA STORICO E GRAFICI ---
   useEffect(() => {
-      if (view === 'history' && user && !['mock-user', 'test-user'].includes(user.uid)) {
+      if (view === 'history' && user) {
           const fetchHistory = async () => {
-              try {
-                  const q = query(
-                      collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
-                      orderBy("date", "desc"),
-                      orderBy("startTime", "desc"),
-                      limit(30) // Ultimi 30 allenamenti
-                  );
-                  const querySnapshot = await getDocs(q);
-                  const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                  setHistoryLogs(logs);
-                  
-                  // Prepara dati grafico (Ultimi 7 giorni di allenamento)
-                  const last7Logs = logs.slice(0, 7).reverse();
-                  const chart = last7Logs.map(l => ({
-                      label: new Date(l.date).toLocaleDateString('it-IT', {day: '2-digit', month: '2-digit'}),
-                      value: l.totalTonnage
-                  }));
-                  setChartData(chart);
+              let logs = [];
+              if (!['mock-user', 'test-user'].includes(user.uid)) {
+                  try {
+                      setLoading(true);
+                      const q = query(
+                          collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
+                          orderBy("date", "desc"),
+                          limit(50) 
+                      );
+                      const querySnapshot = await getDocs(q);
+                      logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                  } catch (e) { console.error(e); showToast("Errore storico", 'error'); }
+                  setLoading(false);
+              } else {
+                   // Mock
+                   logs = [
+                       { id: '1', dayName: 'Giorno 1: Petto e Tricipiti', date: '2025-11-18', durationDisplay: '00:45', totalTonnage: 4500, rating: 4, estimatedCalories: 320 },
+                       { id: '2', dayName: 'Giorno 2: Gambe e Spalle', date: '2025-11-15', durationDisplay: '00:55', totalTonnage: 6200, rating: 3, estimatedCalories: 450 },
+                       { id: '3', dayName: 'Giorno 3: Schiena e Bicipiti', date: '2025-11-12', durationDisplay: '00:50', totalTonnage: 5100, rating: 5, estimatedCalories: 380 },
+                       { id: '4', dayName: 'Giorno 1: Petto e Tricipiti', date: '2025-11-09', durationDisplay: '00:48', totalTonnage: 4300, rating: 4, estimatedCalories: 300 },
+                   ];
+              }
+              
+              setHistoryLogs(logs);
 
-              } catch (e) { console.error(e); }
+              // 1. Settimanale
+              const last7 = logs.slice(0, 7).reverse().map(l => ({
+                  label: new Date(l.date).toLocaleDateString('it-IT', {day: 'numeric', month: 'short'}),
+                  value: l.totalTonnage
+              }));
+              setWeeklyVolume(last7);
+              
+              // 2. Mensile
+              const monthlyData = logs.slice(0, 30).reverse().map(l => ({
+                   label: new Date(l.date).toLocaleDateString('it-IT', {day: 'numeric'}),
+                   value: l.totalTonnage
+              }));
+              setMonthlyVolume(monthlyData);
           };
           fetchHistory();
-      } else if (view === 'history') {
-           // Mock Data
-           const mockLogs = [
-               { id: '1', dayName: 'Petto', date: '2025-01-08', durationDisplay: '00:45', totalTonnage: 4500, rating: 4 },
-               { id: '2', dayName: 'Gambe', date: '2025-01-06', durationDisplay: '00:55', totalTonnage: 6200, rating: 3 },
-               { id: '3', dayName: 'Schiena', date: '2025-01-04', durationDisplay: '00:50', totalTonnage: 5100, rating: 5 },
-               { id: '4', dayName: 'Petto', date: '2025-01-01', durationDisplay: '00:40', totalTonnage: 4200, rating: 4 },
-           ];
-           setHistoryLogs(mockLogs);
-           setChartData(mockLogs.reverse().map(l => ({ label: l.date.slice(5), value: l.totalTonnage })));
       }
   }, [view, user]);
 
-  if (loading) return <div className="min-h-screen bg-gray-950 flex items-center justify-center"><div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
+  // Aggiorna Grafico Progressione quando cambia il filtro o i log
+  useEffect(() => {
+    if (historyLogs.length > 0) {
+        // Filtra per nome giorno (contiene la stringa selezionata, es "Giorno 1")
+        const filteredLogs = historyLogs
+            .filter(l => l.dayName && l.dayName.includes(selectedProgressionDay))
+            .sort((a, b) => new Date(a.date) - new Date(b.date)); // Ordine cronologico
+            
+        const data = filteredLogs.map(l => ({
+            label: new Date(l.date).toLocaleDateString('it-IT', {day: '2-digit', month: '2-digit'}),
+            value: l.totalTonnage
+        }));
+        setProgressionData(data);
+    }
+  }, [selectedProgressionDay, historyLogs]);
+
+
+  if (loading && view !== 'active-workout') return <div className="min-h-screen bg-gray-950 flex items-center justify-center"><div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
 
   if (!user) return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6 text-white">
@@ -545,13 +611,7 @@ export default function App() {
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans">
       
       {/* TOAST */}
-      <div 
-          className={`fixed top-4 left-1/2 transform -translate-x-1/2 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-[100] transition-all duration-300 ${
-            toast.show ? 'translate-y-0 opacity-100' : '-translate-y-20 opacity-0'
-          } ${
-            toast.type === 'error' ? 'bg-red-900/90 border-red-700' : 'bg-gray-800/90 border-gray-700 backdrop-blur'
-          }`}
-      >
+      <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-[100] transition-all duration-300 ${toast.show ? 'translate-y-0 opacity-100' : '-translate-y-20 opacity-0'} ${toast.type === 'error' ? 'bg-red-900/90 border-red-700' : 'bg-gray-800/90 border-gray-700 backdrop-blur'}`}>
           {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-green-500" />}
           {toast.type === 'error' && <AlertCircle className="w-5 h-5 text-red-400" />}
           {toast.type === 'info' && <Info className="w-5 h-5 text-blue-400" />}
@@ -581,7 +641,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* MENU */}
       {isMenuOpen && (
           <div className="fixed inset-0 z-50 flex justify-end">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)}></div>
@@ -602,7 +661,6 @@ export default function App() {
           </div>
       )}
 
-      {/* REST TIMER */}
       {restTimer.isOpen && (
           <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-6 animate-in fade-in">
               <div className="text-gray-400 mb-6 uppercase tracking-widest text-sm font-bold">Recupero</div>
@@ -617,7 +675,6 @@ export default function App() {
           </div>
       )}
 
-      {/* FINISH MODAL */}
       {finishModalOpen && (
           <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-6 animate-in zoom-in">
              <div className="text-center mb-8">
@@ -640,7 +697,6 @@ export default function App() {
 
       <main className="max-w-4xl mx-auto pt-20 pb-32 px-4 min-h-screen">
         
-        {/* VIEW: DASHBOARD / ACTIVE */}
         {(view === 'dashboard' || view === 'active-workout') && (
             <div className="animate-in fade-in duration-300">
                 {view === 'dashboard' && (
@@ -700,19 +756,44 @@ export default function App() {
             </div>
         )}
 
-        {/* VIEW: STORICO */}
+        {/* STORICO & STATISTICHE */}
         {view === 'history' && (
             <div className="animate-in fade-in duration-300 space-y-8">
-                <div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Progressione Volume</h2>
-                    <p className="text-sm text-gray-400 mb-4">Ultimi allenamenti (Kg Totali)</p>
-                    <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800">
-                        <BarChart data={chartData} />
+                
+                {/* Filtro Progressione (Selezione Giorno) */}
+                <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800">
+                    <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 text-green-500" /> Progressione Volume
+                        </h4>
+                        <div className="relative">
+                            <select 
+                                value={selectedProgressionDay} 
+                                onChange={(e) => setSelectedProgressionDay(e.target.value)}
+                                className="bg-gray-800 text-xs text-white p-2 pr-8 rounded-lg appearance-none focus:outline-none border border-gray-700"
+                            >
+                                <option value="Giorno 1">Giorno 1 (Petto)</option>
+                                <option value="Giorno 2">Giorno 2 (Gambe)</option>
+                                <option value="Giorno 3">Giorno 3 (Schiena)</option>
+                                <option value="Giorno 4">Giorno 4 (Richiamo)</option>
+                            </select>
+                            <Filter className="w-3 h-3 absolute right-2 top-3 text-gray-400 pointer-events-none" />
+                        </div>
                     </div>
+                    {/* Grafico Linea Progressione */}
+                    <LineChart data={progressionData} title={`Volume Totale - ${selectedProgressionDay}`} />
                 </div>
 
                 <div>
-                    <h3 className="text-xl font-bold text-white mb-4">Registro Sessioni</h3>
+                     <h2 className="text-xl font-bold text-white mb-2">Analisi Recente</h2>
+                     <div className="grid grid-cols-1 gap-4">
+                        <BarChart data={weeklyVolume} title="Ultimi 7 Allenamenti" color="blue" />
+                        <BarChart data={monthlyVolume} title="Ultimi 30 Giorni" color="green" />
+                     </div>
+                </div>
+
+                <div>
+                    <h3 className="text-xl font-bold text-white mb-4 flex items-center"><History className="w-5 h-5 mr-2 text-blue-500" /> Registro Sessioni</h3>
                     <div className="space-y-4">
                         {historyLogs.map((log) => (
                             <div key={log.id} className="bg-gray-900 p-4 rounded-xl border border-gray-800 flex flex-col gap-3 hover:border-gray-700 transition-colors">
@@ -732,7 +813,42 @@ export default function App() {
                                 </div>
                             </div>
                         ))}
-                        {historyLogs.length === 0 && <p className="text-center text-gray-500 py-8">Nessun dato disponibile.</p>}
+                        {historyLogs.length === 0 && <p className="text-center text-gray-500 py-8 bg-gray-900 rounded-xl border border-gray-800">Nessun dato disponibile nel periodo selezionato.</p>}
+                    </div>
+                </div>
+            </div>
+        )}
+        
+        {view === 'profile' && userProfile && (
+            <div className="animate-in fade-in zoom-in duration-300 flex flex-col items-center justify-center py-12">
+                <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6 border-4 border-gray-800 shadow-xl relative">
+                    <User className="w-10 h-10 text-gray-500" />
+                    <div className="absolute bottom-0 right-0 bg-blue-600 px-2 py-1 rounded-full text-xs font-bold border-2 border-gray-900">
+                        {userProfile.age}
+                    </div>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-1">{userProfile.name} {userProfile.surname}</h2>
+                <p className="text-gray-500 mb-6">{user.email}</p>
+
+                <div className="grid grid-cols-2 gap-4 w-full max-w-sm mb-6">
+                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 text-center">
+                        <span className="block text-gray-400 text-xs uppercase mb-1">Peso</span>
+                        <span className="text-xl font-bold text-white">{userProfile.weight} <span className="text-sm font-normal text-gray-500">kg</span></span>
+                    </div>
+                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 text-center">
+                        <span className="block text-gray-400 text-xs uppercase mb-1">Sesso</span>
+                        <span className="text-xl font-bold text-white">{userProfile.sex}</span>
+                    </div>
+                </div>
+
+                <div className="w-full max-w-sm space-y-3">
+                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 flex justify-between items-center">
+                        <span className="text-gray-400">Allenamenti completati</span>
+                        <span className="text-xl font-bold text-white">{historyLogs.length}</span>
+                    </div>
+                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 flex justify-between items-center">
+                        <span className="text-gray-400">Tonnellaggio Totale</span>
+                        <span className="text-xl font-bold text-blue-500">{historyLogs.reduce((acc, curr) => acc + (curr.totalTonnage || 0), 0).toLocaleString()} Kg</span>
                     </div>
                 </div>
             </div>
