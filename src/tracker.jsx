@@ -19,7 +19,7 @@ import {
   setDoc,
   doc,
   getDoc,
-  where
+  startAfter
 } from "firebase/firestore";
 import { 
   Menu, 
@@ -46,25 +46,47 @@ import {
   TrendingUp,
   Activity,
   History,
-  Filter
+  Filter,
+  ChevronDown
 } from 'lucide-react';
 
+// Chart.js Imports
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+import { Bar, Line } from 'react-chartjs-2';
+
+// Registrazione componenti Chart.js
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
+
 // --- CONFIGURAZIONE FIREBASE ---
-const firebaseConfig = {
-  apiKey: "AIzaSyCfTXY1foD8Dr9UxRNzLeOu680aNtIw4TA",
-  authDomain: "training-c0b76.firebaseapp.com",
-  projectId: "training-c0b76",
-  storageBucket: "training-c0b76.firebasestorage.app",
-  messagingSenderId: "149618028951",
-  appId: "1:149618028951:web:03756bdf1273a4521954d2"
-};
+const firebaseConfig = JSON.parse(localStorage.getItem('firebase_config') || '{}');
 const safeConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
 
 const app = initializeApp(safeConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ID App per la struttura del DB (dal tuo vecchio file)
+// ID App per la struttura del DB
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
 
 // --- DATI INIZIALI (Template) ---
@@ -140,104 +162,38 @@ const formatDuration = (seconds) => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
-// --- COMPONENTI GRAFICI SVG CUSTOM ---
-
-const BarChart = ({ data, title, color = "blue" }) => {
-    if (!data || data.length === 0) return <div className="text-gray-500 text-xs text-center py-4 bg-gray-900 rounded-xl border border-gray-800">Nessun dato per {title}</div>;
-    
-    const maxVal = Math.max(...data.map(d => d.value));
-    const chartHeight = 100;
-    
-    return (
-        <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800">
-            <h4 className="text-sm font-bold text-gray-400 mb-4 uppercase tracking-wider flex items-center justify-between">
-                {title}
-                <span className="text-xs font-normal normal-case text-gray-500">Max: {maxVal}</span>
-            </h4>
-            <div className="flex items-end justify-between h-[100px] w-full gap-2 relative mt-2">
-                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
-                    <div className="border-t border-gray-500 w-full"></div>
-                    <div className="border-t border-gray-500 w-full"></div>
-                    <div className="border-t border-gray-500 w-full"></div>
-                </div>
-
-                {data.map((d, i) => (
-                    <div key={i} className="flex flex-col items-center flex-1 group relative h-full justify-end z-10">
-                        <div 
-                            className={`w-full max-w-[12px] sm:max-w-[20px] rounded-t-sm transition-all duration-700 ease-out ${color === 'green' ? 'bg-green-600/70 hover:bg-green-500' : 'bg-blue-600/70 hover:bg-blue-500'}`}
-                            style={{ height: `${maxVal > 0 ? (d.value / maxVal) * 100 : 0}%` }}
-                        >
-                             {/* Tooltip on hover */}
-                            <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded shadow-lg border border-gray-700 pointer-events-none whitespace-nowrap z-20">
-                                {d.value}
-                            </div>
-                        </div>
-                        <span className="text-[8px] sm:text-[9px] text-gray-500 mt-2 rotate-0 truncate w-full text-center font-mono">{d.label}</span>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
+// --- CONFIGURAZIONE GRAFICI CHART.JS ---
+const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: { display: false },
+        tooltip: {
+            backgroundColor: '#1f2937',
+            titleColor: '#fff',
+            bodyColor: '#fff',
+            borderColor: '#374151',
+            borderWidth: 1,
+            padding: 10,
+            displayColors: false,
+        }
+    },
+    scales: {
+        x: {
+            ticks: { color: '#9ca3af', font: { size: 10 } },
+            grid: { color: '#374151', drawBorder: false }
+        },
+        y: {
+            ticks: { color: '#9ca3af', font: { size: 10 } },
+            grid: { color: '#374151', borderDash: [5, 5] },
+            beginAtZero: true
+        }
+    }
 };
-
-const LineChart = ({ data, title }) => {
-     if (!data || data.length < 2) return <div className="text-gray-500 text-xs text-center py-4 bg-gray-900 rounded-xl border border-gray-800">Dati insufficienti per il grafico di progressione (servono almeno 2 allenamenti).</div>;
-
-     const maxVal = Math.max(...data.map(d => d.value));
-     const minVal = Math.min(...data.map(d => d.value)) * 0.9;
-     const range = maxVal - minVal;
-     
-     // Genera punti SVG
-     const points = data.map((d, i) => {
-         const x = (i / (data.length - 1)) * 100;
-         const y = 100 - ((d.value - minVal) / range) * 100;
-         return `${x},${y}`;
-     }).join(' ');
-
-     return (
-        <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800">
-            <h4 className="text-sm font-bold text-gray-400 mb-4 uppercase tracking-wider flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-green-500" /> {title}
-            </h4>
-            <div className="relative h-[120px] w-full mt-2 pr-2">
-                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
-                     {/* Griglia */}
-                     <line x1="0" y1="0" x2="100" y2="0" stroke="#374151" strokeWidth="0.5" strokeDasharray="2" opacity="0.5" />
-                     <line x1="0" y1="50" x2="100" y2="50" stroke="#374151" strokeWidth="0.5" strokeDasharray="2" opacity="0.5" />
-                     <line x1="0" y1="100" x2="100" y2="100" stroke="#374151" strokeWidth="0.5" strokeDasharray="2" opacity="0.5" />
-                     
-                     {/* Linea */}
-                     <polyline 
-                        points={points} 
-                        fill="none" 
-                        stroke="#10b981" 
-                        strokeWidth="2" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                     />
-                     {/* Punti */}
-                     {data.map((d, i) => {
-                         const x = (i / (data.length - 1)) * 100;
-                         const y = 100 - ((d.value - minVal) / range) * 100;
-                         return (
-                             <circle key={i} cx={x} cy={y} r="3" fill="#10b981" className="hover:r-4 transition-all" />
-                         );
-                     })}
-                 </svg>
-                 {/* Etichette X (Solo prima e ultima per pulizia) */}
-                 <div className="flex justify-between text-[9px] text-gray-500 mt-2 font-mono">
-                     <span>{data[0].label}</span>
-                     <span>{data[data.length - 1].label}</span>
-                 </div>
-            </div>
-        </div>
-     );
-};
-
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(null); // NUOVO: Stato profilo
+  const [userProfile, setUserProfile] = useState(null); 
   const [loading, setLoading] = useState(true);
   
   // Navigazione
@@ -260,35 +216,32 @@ export default function App() {
 
   // Storico & Analisi
   const [historyLogs, setHistoryLogs] = useState([]);
-  const [weeklyVolume, setWeeklyVolume] = useState([]);
-  const [monthlyVolume, setMonthlyVolume] = useState([]);
-  const [progressionData, setProgressionData] = useState([]); // Dati per grafico linea
-  const [selectedProgressionDay, setSelectedProgressionDay] = useState('Giorno 1'); // Filtro per grafico
+  const [lastVisibleLog, setLastVisibleLog] = useState(null); // Per paginazione
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [allHistoryLoaded, setAllHistoryLoaded] = useState(false);
+  
+  // Dati Grafici
+  const [weeklyVolumeData, setWeeklyVolumeData] = useState(null);
+  const [monthlyVolumeData, setMonthlyVolumeData] = useState(null);
+  const [progressionData, setProgressionData] = useState(null); 
+  const [selectedProgressionDay, setSelectedProgressionDay] = useState('Giorno 1'); 
 
   // Auth Form
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // --- FUNZIONI DI SUPPORTO ---
-  
-  // Carica il profilo utente da Firestore
+  // --- PERSISTENZA UTENTE ---
   const fetchUserProfile = async (userId) => {
     if (!userId || userId === 'mock-user') {
-        // Profilo Mock
         setUserProfile({ name: "Davide", surname: "Micaletto", weight: 68, age: 52 });
         return;
     }
     try {
         const docRef = doc(db, `artifacts/${APP_ID}/users/${userId}/profiles_meta`, 'data');
         const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            console.log("[DEBUG] Profilo caricato:", docSnap.data());
-            setUserProfile(docSnap.data());
-        }
-    } catch (e) {
-        console.error("Errore caricamento profilo:", e);
-    }
+        if (docSnap.exists()) setUserProfile(docSnap.data());
+    } catch (e) { console.error("Profile Error:", e); }
   };
 
   const fetchUserDefaults = async (userId) => {
@@ -315,6 +268,7 @@ export default function App() {
       } catch (e) { console.error(e); }
   };
 
+  // --- HELPER FUNCTIONS ---
   const showToast = (message, type = 'success') => {
       setToast({ show: true, message, type });
       setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
@@ -346,14 +300,24 @@ export default function App() {
           if (child) child.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
   };
+    
+  const saveSessionLocally = (session) => {
+      if (user) {
+          localStorage.setItem(`active_session_${user.uid}`, JSON.stringify({
+              session,
+              startTime: startTime ? startTime.toISOString() : new Date().toISOString(),
+              timer: sessionTimer
+          }));
+      }
+  };
+  const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
 
-  // --- LOGICA DI NAVIGAZIONE E AGGIORNAMENTO ---
 
+  // --- LOGICA ALLENAMENTO ---
   const handleSetCompletion = (exerciseIndex, setIndex) => {
       if (!activeSession) return;
       const exercise = activeSession.exercises[exerciseIndex];
       const set = exercise.sets[setIndex];
-
       if (set.completed) return; 
 
       const updatedSession = { ...activeSession };
@@ -380,7 +344,6 @@ export default function App() {
 
   const updateSetValues = (exerciseIndex, setIndex, field, value) => {
       if (activeSession.exercises[exerciseIndex].sets[setIndex].completed) return;
-
       const updatedSession = { ...activeSession };
       const exerciseId = updatedSession.exercises[exerciseIndex].id;
       
@@ -393,18 +356,7 @@ export default function App() {
       }
   };
 
-  const saveSessionLocally = (session) => {
-      if (user) {
-          localStorage.setItem(`active_session_${user.uid}`, JSON.stringify({
-              session,
-              startTime: startTime ? startTime.toISOString() : new Date().toISOString(),
-              timer: sessionTimer
-          }));
-      }
-  };
-  const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
-
-  // --- HANDLERS UI ---
+  // --- HANDLERS ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setAuthError('');
@@ -464,7 +416,6 @@ export default function App() {
 
       if (user.uid !== 'mock-user' && user.uid !== 'test-user') {
           try {
-              // Salvataggio nella collezione originale per compatibilità
               await addDoc(collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`), workoutLog);
               showToast("Salvato con successo!", 'success');
           } catch (e) { console.error("Save error:", e); showToast("Errore salvataggio!", 'error'); return; }
@@ -495,12 +446,10 @@ export default function App() {
     }
   }, []);
 
-  // Fetch Profilo
   useEffect(() => {
       if(user) fetchUserProfile(user.uid);
   }, [user]);
 
-  // Restore Session
   useEffect(() => {
       if (user && view === 'dashboard' && !activeSession) {
           const saved = localStorage.getItem(`active_session_${user.uid}`);
@@ -518,7 +467,6 @@ export default function App() {
       }
   }, [user]);
 
-  // Timers
   useEffect(() => {
       let interval;
       if (view === 'active-workout' && !finishModalOpen) {
@@ -534,68 +482,115 @@ export default function App() {
       return () => clearInterval(interval);
   }, [restTimer.isOpen, restTimer.timeLeft]);
 
-  // --- LOGICA STORICO E GRAFICI ---
-  useEffect(() => {
-      if (view === 'history' && user) {
-          const fetchHistory = async () => {
-              let logs = [];
-              if (!['mock-user', 'test-user'].includes(user.uid)) {
-                  try {
-                      setLoading(true);
-                      const q = query(
-                          collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
-                          orderBy("date", "desc"),
-                          limit(50) 
-                      );
-                      const querySnapshot = await getDocs(q);
-                      logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                  } catch (e) { console.error(e); showToast("Errore storico", 'error'); }
-                  setLoading(false);
-              } else {
-                   // Mock
-                   logs = [
-                       { id: '1', dayName: 'Giorno 1: Petto e Tricipiti', date: '2025-11-18', durationDisplay: '00:45', totalTonnage: 4500, rating: 4, estimatedCalories: 320 },
-                       { id: '2', dayName: 'Giorno 2: Gambe e Spalle', date: '2025-11-15', durationDisplay: '00:55', totalTonnage: 6200, rating: 3, estimatedCalories: 450 },
-                       { id: '3', dayName: 'Giorno 3: Schiena e Bicipiti', date: '2025-11-12', durationDisplay: '00:50', totalTonnage: 5100, rating: 5, estimatedCalories: 380 },
-                       { id: '4', dayName: 'Giorno 1: Petto e Tricipiti', date: '2025-11-09', durationDisplay: '00:48', totalTonnage: 4300, rating: 4, estimatedCalories: 300 },
-                   ];
-              }
-              
-              setHistoryLogs(logs);
+  // --- CARICAMENTO STORICO (PAGINATO) ---
+  const loadHistory = async (isInitial = false) => {
+      if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
+      
+      setLoadingHistory(true);
+      try {
+          let q = query(
+              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
+              orderBy("date", "desc"),
+              orderBy("startTime", "desc"),
+              limit(10)
+          );
 
-              // 1. Settimanale
-              const last7 = logs.slice(0, 7).reverse().map(l => ({
-                  label: new Date(l.date).toLocaleDateString('it-IT', {day: 'numeric', month: 'short'}),
-                  value: l.totalTonnage
-              }));
-              setWeeklyVolume(last7);
-              
-              // 2. Mensile
-              const monthlyData = logs.slice(0, 30).reverse().map(l => ({
-                   label: new Date(l.date).toLocaleDateString('it-IT', {day: 'numeric'}),
-                   value: l.totalTonnage
-              }));
-              setMonthlyVolume(monthlyData);
-          };
-          fetchHistory();
+          if (!isInitial && lastVisibleLog) {
+              q = query(q, startAfter(lastVisibleLog));
+          }
+
+          const querySnapshot = await getDocs(q);
+          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          setLastVisibleLog(querySnapshot.docs[querySnapshot.docs.length - 1]);
+          setHistoryLogs(prev => isInitial ? logs : [...prev, ...logs]);
+          if (querySnapshot.empty) setAllHistoryLoaded(true);
+
+      } catch (e) { console.error(e); showToast("Errore caricamento storico", 'error'); }
+      setLoadingHistory(false);
+  };
+
+  const loadChartData = async () => {
+       if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
+       try {
+           // Per i grafici carichiamo un batch più ampio ma solo i campi necessari sarebbe meglio
+           // Qui per semplicità carichiamo gli ultimi 50 per le stats
+           const q = query(
+              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
+              orderBy("date", "desc"),
+              limit(50)
+          );
+          const querySnapshot = await getDocs(q);
+          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
+          // Chart Settimanale (Ultimi 7 logs)
+          const weeklyLogs = logs.slice(0, 7).reverse();
+          setWeeklyVolume({
+              labels: weeklyLogs.map(l => l.date.slice(5)), // MM-DD
+              datasets: [{
+                  label: 'Volume (Kg)',
+                  data: weeklyLogs.map(l => l.totalTonnage),
+                  backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                  borderColor: 'rgba(59, 130, 246, 1)',
+                  borderWidth: 1,
+              }]
+          });
+          
+          // Chart Mensile (Ultimi 30gg)
+          const last30DaysLogs = logs.filter(l => (new Date() - new Date(l.date)) / (1000 * 60 * 60 * 24) <= 30);
+          const monthlyLogs = last30DaysLogs.reverse();
+          setMonthlyVolume({
+               labels: monthlyLogs.map(l => l.date.slice(5)),
+               datasets: [{
+                   label: 'Volume (Kg)',
+                   data: monthlyLogs.map(l => l.totalTonnage),
+                   backgroundColor: 'rgba(16, 185, 129, 0.5)',
+                   borderColor: 'rgba(16, 185, 129, 1)',
+                   borderWidth: 1,
+               }]
+          });
+
+          // Chart Progressione (Giorno Selezionato)
+          const progressionLogs = logs.filter(l => l.dayName && l.dayName.includes(selectedProgressionDay)).reverse();
+          setProgressionData({
+               labels: progressionLogs.map(l => l.date.slice(5)),
+               datasets: [{
+                   label: 'Progressione Volume',
+                   data: progressionLogs.map(l => l.totalTonnage),
+                   borderColor: '#10b981',
+                   backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                   tension: 0.3,
+                   fill: true
+               }]
+          });
+
+       } catch(e) { console.error(e); }
+  };
+
+  useEffect(() => {
+      if (view === 'history') {
+          if(!['mock-user', 'test-user'].includes(user?.uid)) {
+              setHistoryLogs([]); // Reset
+              setLastVisibleLog(null);
+              setAllHistoryLoaded(false);
+              loadHistory(true);
+              loadChartData();
+          } else {
+              // Mock
+              const mData = {
+                  labels: ['01-01', '01-04', '01-06', '01-08'],
+                  datasets: [{ label: 'Volume (Kg)', data: [4200, 5100, 6200, 4500], backgroundColor: 'rgba(59, 130, 246, 0.5)' }]
+              };
+              setWeeklyVolumeData(mData); // Corrected function name
+              setMonthlyVolumeData(mData); // Corrected function name
+              setProgressionData(mData);
+              setHistoryLogs([
+                  { id: '1', dayName: 'Petto', date: '2025-01-08', durationDisplay: '00:45', totalTonnage: 4500, rating: 4 },
+                  { id: '2', dayName: 'Gambe', date: '2025-01-06', durationDisplay: '00:55', totalTonnage: 6200, rating: 3 }
+              ]);
+          }
       }
-  }, [view, user]);
-
-  // Aggiorna Grafico Progressione quando cambia il filtro o i log
-  useEffect(() => {
-    if (historyLogs.length > 0) {
-        // Filtra per nome giorno (contiene la stringa selezionata, es "Giorno 1")
-        const filteredLogs = historyLogs
-            .filter(l => l.dayName && l.dayName.includes(selectedProgressionDay))
-            .sort((a, b) => new Date(a.date) - new Date(b.date)); // Ordine cronologico
-            
-        const data = filteredLogs.map(l => ({
-            label: new Date(l.date).toLocaleDateString('it-IT', {day: '2-digit', month: '2-digit'}),
-            value: l.totalTonnage
-        }));
-        setProgressionData(data);
-    }
-  }, [selectedProgressionDay, historyLogs]);
+  }, [view, user, selectedProgressionDay]);
 
 
   if (loading && view !== 'active-workout') return <div className="min-h-screen bg-gray-950 flex items-center justify-center"><div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
@@ -607,8 +602,10 @@ export default function App() {
             <form onSubmit={handleLogin} className="space-y-4">
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-3 bg-gray-950 border border-gray-800 rounded-xl text-white" placeholder="Email" />
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-3 bg-gray-950 border border-gray-800 rounded-xl text-white" placeholder="Password" />
-                <button type="submit" className="w-full py-3 bg-blue-600 rounded-xl font-bold">Accedi</button>
-                <button type="button" onClick={() => setUser({uid:'mock', email:'demo'})} className="w-full py-2 text-sm text-gray-500">Demo</button>
+                <button type="submit" className="w-full py-3 bg-blue-600 rounded-xl font-bold hover:bg-blue-500 transition-colors">Accedi</button>
+                <div className="text-center pt-2">
+                    <button type="button" onClick={() => setUser({uid:'mock', email:'demo'})} className="text-sm text-gray-500 hover:text-white underline">Modalità Demo</button>
+                </div>
             </form>
         </div>
       </div>
@@ -630,11 +627,21 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-4 h-16 flex justify-between items-center">
             {view === 'active-workout' ? (
                 <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center text-blue-400 font-mono text-xl font-bold animate-pulse">
-                        <Timer className="w-5 h-5 mr-2" />
-                        {formatDuration(sessionTimer)}
+                    {/* Pulsante Annulla (Sinistra) */}
+                    <button onClick={handleCancelWorkout} className="text-xs text-red-400 font-semibold border border-red-900/50 px-3 py-1 rounded-full hover:bg-red-900/10 flex items-center gap-1">
+                        <X className="w-3 h-3" /> ESCI
+                    </button>
+                    
+                    {/* Timer e Volume (Centro/Destra) */}
+                    <div className="flex flex-col items-end">
+                         <div className="flex items-center text-blue-400 font-mono text-lg font-bold animate-pulse">
+                            <Timer className="w-4 h-4 mr-1" />
+                            {formatDuration(sessionTimer)}
+                        </div>
+                        <div className="text-xs font-mono text-green-400">
+                             Tot: {calculateTotalVolume(activeSession)} kg
+                        </div>
                     </div>
-                    <button onClick={handleCancelWorkout} className="text-xs text-red-400 font-semibold border border-red-900/50 px-3 py-1 rounded-full hover:bg-red-900/10">ANNULLA</button>
                 </div>
             ) : (
                 <>
@@ -648,6 +655,7 @@ export default function App() {
         </div>
       </header>
 
+      {/* MENU */}
       {isMenuOpen && (
           <div className="fixed inset-0 z-50 flex justify-end">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)}></div>
@@ -668,6 +676,7 @@ export default function App() {
           </div>
       )}
 
+      {/* REST TIMER */}
       {restTimer.isOpen && (
           <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-6 animate-in fade-in">
               <div className="text-gray-400 mb-6 uppercase tracking-widest text-sm font-bold">Recupero</div>
@@ -682,6 +691,7 @@ export default function App() {
           </div>
       )}
 
+      {/* FINISH MODAL */}
       {finishModalOpen && (
           <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-6 animate-in zoom-in">
              <div className="text-center mb-8">
@@ -704,6 +714,7 @@ export default function App() {
 
       <main className="max-w-4xl mx-auto pt-20 pb-32 px-4 min-h-screen">
         
+        {/* VIEW: DASHBOARD / ACTIVE */}
         {(view === 'dashboard' || view === 'active-workout') && (
             <div className="animate-in fade-in duration-300">
                 {view === 'dashboard' && (
@@ -763,22 +774,18 @@ export default function App() {
             </div>
         )}
 
-        {/* STORICO & STATISTICHE */}
+        {/* VIEW: STORICO & CHART.JS */}
         {view === 'history' && (
             <div className="animate-in fade-in duration-300 space-y-8">
                 
-                {/* Filtro Progressione (Selezione Giorno) */}
+                {/* Filtro Progressione */}
                 <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800">
                     <div className="flex items-center justify-between mb-4">
                         <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
                             <TrendingUp className="w-4 h-4 text-green-500" /> Progressione Volume
                         </h4>
                         <div className="relative">
-                            <select 
-                                value={selectedProgressionDay} 
-                                onChange={(e) => setSelectedProgressionDay(e.target.value)}
-                                className="bg-gray-800 text-xs text-white p-2 pr-8 rounded-lg appearance-none focus:outline-none border border-gray-700"
-                            >
+                            <select value={selectedProgressionDay} onChange={(e) => setSelectedProgressionDay(e.target.value)} className="bg-gray-800 text-xs text-white p-2 pr-8 rounded-lg appearance-none focus:outline-none border border-gray-700">
                                 <option value="Giorno 1">Giorno 1 (Petto)</option>
                                 <option value="Giorno 2">Giorno 2 (Gambe)</option>
                                 <option value="Giorno 3">Giorno 3 (Schiena)</option>
@@ -787,15 +794,16 @@ export default function App() {
                             <Filter className="w-3 h-3 absolute right-2 top-3 text-gray-400 pointer-events-none" />
                         </div>
                     </div>
-                    {/* Grafico Linea Progressione */}
-                    <LineChart data={progressionData} title={`Volume Totale - ${selectedProgressionDay}`} />
+                    {progressionData && <div className="h-64"><Line data={progressionData} options={chartOptions} /></div>}
                 </div>
 
                 <div>
                      <h2 className="text-xl font-bold text-white mb-2">Analisi Recente</h2>
                      <div className="grid grid-cols-1 gap-4">
-                        <BarChart data={weeklyVolume} title="Ultimi 7 Allenamenti" color="blue" />
-                        <BarChart data={monthlyVolume} title="Ultimi 30 Giorni" color="green" />
+                        <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800">
+                            <h4 className="text-sm text-gray-400 mb-2">Volume Settimanale</h4>
+                            {weeklyVolumeData && <div className="h-48"><Bar data={weeklyVolumeData} options={chartOptions} /></div>}
+                        </div>
                      </div>
                 </div>
 
@@ -814,13 +822,13 @@ export default function App() {
                                         <div className="flex justify-end mt-1">{[...Array(5)].map((_, i) => (<Star key={i} className={`w-3 h-3 ${i < log.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-800'}`} />))}</div>
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-between pt-3 border-t border-gray-800 text-sm">
-                                    <div className="flex items-center gap-2 text-gray-400"><Clock className="w-4 h-4 text-blue-500" /> {log.durationDisplay}</div>
-                                    <div className="flex items-center gap-2 text-gray-400"><Activity className="w-4 h-4 text-red-500" /> ~{log.estimatedCalories} Kcal</div>
-                                </div>
                             </div>
                         ))}
-                        {historyLogs.length === 0 && <p className="text-center text-gray-500 py-8 bg-gray-900 rounded-xl border border-gray-800">Nessun dato disponibile nel periodo selezionato.</p>}
+                        {!allHistoryLoaded && (
+                            <button onClick={() => loadHistory()} disabled={loadingHistory} className="w-full py-3 bg-gray-800 text-gray-400 rounded-xl text-sm font-semibold hover:bg-gray-700">
+                                {loadingHistory ? "Caricamento..." : "Carica Altri"}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -830,33 +838,13 @@ export default function App() {
             <div className="animate-in fade-in zoom-in duration-300 flex flex-col items-center justify-center py-12">
                 <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6 border-4 border-gray-800 shadow-xl relative">
                     <User className="w-10 h-10 text-gray-500" />
-                    <div className="absolute bottom-0 right-0 bg-blue-600 px-2 py-1 rounded-full text-xs font-bold border-2 border-gray-900">
-                        {userProfile.age}
-                    </div>
+                    <div className="absolute bottom-0 right-0 bg-blue-600 px-2 py-1 rounded-full text-xs font-bold border-2 border-gray-900">{userProfile.age}</div>
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-1">{userProfile.name} {userProfile.surname}</h2>
                 <p className="text-gray-500 mb-6">{user.email}</p>
-
                 <div className="grid grid-cols-2 gap-4 w-full max-w-sm mb-6">
-                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 text-center">
-                        <span className="block text-gray-400 text-xs uppercase mb-1">Peso</span>
-                        <span className="text-xl font-bold text-white">{userProfile.weight} <span className="text-sm font-normal text-gray-500">kg</span></span>
-                    </div>
-                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 text-center">
-                        <span className="block text-gray-400 text-xs uppercase mb-1">Sesso</span>
-                        <span className="text-xl font-bold text-white">{userProfile.sex}</span>
-                    </div>
-                </div>
-
-                <div className="w-full max-w-sm space-y-3">
-                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 flex justify-between items-center">
-                        <span className="text-gray-400">Allenamenti completati</span>
-                        <span className="text-xl font-bold text-white">{historyLogs.length}</span>
-                    </div>
-                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 flex justify-between items-center">
-                        <span className="text-gray-400">Tonnellaggio Totale</span>
-                        <span className="text-xl font-bold text-blue-500">{historyLogs.reduce((acc, curr) => acc + (curr.totalTonnage || 0), 0).toLocaleString()} Kg</span>
-                    </div>
+                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 text-center"><span className="block text-gray-400 text-xs uppercase mb-1">Peso</span><span className="text-xl font-bold text-white">{userProfile.weight} <span className="text-sm font-normal text-gray-500">kg</span></span></div>
+                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 text-center"><span className="block text-gray-400 text-xs uppercase mb-1">Sesso</span><span className="text-xl font-bold text-white">{userProfile.sex}</span></div>
                 </div>
             </div>
         )}
