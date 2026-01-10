@@ -2,11 +2,11 @@ const CACHE_NAME = 'gym-app-v2';
 
 // File statici fondamentali da cachare subito
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 // Installazione: Cacha gli asset statici
