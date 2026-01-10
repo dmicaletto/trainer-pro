@@ -17,14 +17,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Setup Node SENZA cache npm per evitare l'errore "lock file not found"
+      # Se in futuro committi il package-lock.json, puoi rimettere: cache: 'npm'
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'npm'
 
+      # Usa 'npm install' invece di 'npm ci' per tollerare l'assenza di package-lock.json
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build
         run: npm run build
