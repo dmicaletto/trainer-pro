@@ -50,7 +50,14 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURAZIONE FIREBASE ---
-const firebaseConfig = JSON.parse(localStorage.getItem('firebase_config') || '{}');
+const firebaseConfig = {
+  apiKey: "AIzaSyCfTXY1foD8Dr9UxRNzLeOu680aNtIw4TA",
+  authDomain: "training-c0b76.firebaseapp.com",
+  projectId: "training-c0b76",
+  storageBucket: "training-c0b76.firebasestorage.app",
+  messagingSenderId: "149618028951",
+  appId: "1:149618028951:web:03756bdf1273a4521954d2"
+};
 const safeConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
 
 const app = initializeApp(safeConfig);
