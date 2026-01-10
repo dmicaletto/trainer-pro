@@ -47,7 +47,8 @@ import {
   Activity,
   History,
   Filter,
-  ChevronDown
+  ChevronDown,
+  Edit2
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -78,7 +79,6 @@ ChartJS.register(
   Filler
 );
 
-// --- CONFIGURAZIONE FIREBASE ---
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyCfTXY1foD8Dr9UxRNzLeOu680aNtIw4TA",
@@ -203,6 +203,7 @@ export default function App() {
   // --- STATO ---
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null); 
+  const [isEditingProfile, setIsEditingProfile] = useState(false); // NUOVO: Stato edit profilo
   const [loading, setLoading] = useState(true);
   
   // Navigazione
@@ -239,11 +240,11 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // --- FUNZIONI DI SUPPORTO E LOGICA (ORA POSSONO ACCEDERE AGLI STATI) ---
+  // --- FUNZIONI DI SUPPORTO E LOGICA ---
 
   const fetchUserProfile = async (userId) => {
     if (!userId || userId === 'mock-user') {
-        setUserProfile({ name: "Davide", surname: "Micaletto", weight: 68, age: 52 });
+        setUserProfile({ name: "Davide", surname: "Micaletto", weight: 68, age: 52, sex: 'M' });
         return;
     }
     try {
@@ -251,6 +252,34 @@ export default function App() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) setUserProfile(docSnap.data());
     } catch (e) { console.error("Profile Error:", e); }
+  };
+  
+  // NUOVO: Aggiorna profilo e salva storico peso
+  const updateUserProfile = async () => {
+    if (!user || user.uid === 'mock-user') {
+        setIsEditingProfile(false);
+        showToast("Profilo aggiornato (Mock)", 'success');
+        return;
+    }
+    
+    try {
+        // 1. Salva dati meta profilo
+        const profileRef = doc(db, `artifacts/${APP_ID}/users/${user.uid}/profiles_meta`, 'data');
+        await setDoc(profileRef, userProfile, { merge: true });
+        
+        // 2. Salva storico del peso se modificato
+        const weightLog = {
+            date: new Date().toISOString(),
+            weight: Number(userProfile.weight)
+        };
+        await addDoc(collection(db, `artifacts/${APP_ID}/users/${user.uid}/weight_history`), weightLog);
+
+        setIsEditingProfile(false);
+        showToast("Profilo aggiornato!", 'success');
+    } catch (e) {
+        console.error("Profile Save Error:", e);
+        showToast("Errore salvataggio profilo", 'error');
+    }
   };
 
   const fetchUserDefaults = async (userId) => {
@@ -282,12 +311,26 @@ export default function App() {
       setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
 
-  const calculateTotalVolume = (session) => {
+  // MODIFICATO: Calcola SOLO il volume delle serie COMPLETATE
+  const calculateCompletedVolume = (session) => {
       if (!session) return 0;
       let total = 0;
       session.exercises.forEach(ex => {
           ex.sets.forEach(set => {
-              if (set.weight > 0 && set.reps > 0) {
+              if (set.completed && set.weight > 0 && set.reps > 0) {
+                  total += (set.weight || 0) * (set.reps || 0);
+              }
+          });
+      });
+      return total;
+  };
+
+  const calculateTotalPotentialVolume = (session) => {
+      if (!session) return 0;
+      let total = 0;
+      session.exercises.forEach(ex => {
+          ex.sets.forEach(set => {
+             if (set.weight > 0 && set.reps > 0) {
                   total += (set.weight || 0) * (set.reps || 0);
               }
           });
@@ -317,7 +360,6 @@ export default function App() {
       
       setLoadingHistory(true);
       try {
-          // Query SEMPLIFICATA: Solo ordinamento per data
           let q = query(
               collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
               orderBy("date", "desc"),
@@ -498,7 +540,7 @@ export default function App() {
   };
 
   const handleSaveAndExit = async () => {
-      const totalTonnage = calculateTotalVolume(activeSession);
+      const totalTonnage = calculateCompletedVolume(activeSession);
       const endTime = new Date();
       const durationSeconds = sessionTimer;
       const workoutLog = {
@@ -585,7 +627,6 @@ export default function App() {
   useEffect(() => {
       if (view === 'history') {
           if(!['mock-user', 'test-user'].includes(user?.uid)) {
-              // Reset per evitare flash di dati vecchi
               if(historyLogs.length === 0) loadHistory(true);
               loadChartData();
           } else {
@@ -639,16 +680,19 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-4 h-16 flex justify-between items-center">
             {view === 'active-workout' ? (
                 <div className="flex items-center justify-between w-full">
+                    {/* Pulsante Annulla (Sinistra) */}
                     <button onClick={handleCancelWorkout} className="text-xs text-red-400 font-semibold border border-red-900/50 px-3 py-1 rounded-full hover:bg-red-900/10 flex items-center gap-1">
                         <X className="w-3 h-3" /> ESCI
                     </button>
+                    
+                    {/* Timer e Volume PARZIALE (Centro/Destra) */}
                     <div className="flex flex-col items-end">
                          <div className="flex items-center text-blue-400 font-mono text-lg font-bold animate-pulse">
                             <Timer className="w-4 h-4 mr-1" />
                             {formatDuration(sessionTimer)}
                         </div>
                         <div className="text-xs font-mono text-green-400">
-                             Tot: {calculateTotalVolume(activeSession)} kg
+                             Vol: {calculateCompletedVolume(activeSession)} kg
                         </div>
                     </div>
                 </div>
@@ -709,7 +753,7 @@ export default function App() {
              </div>
              <div className="bg-gray-900 w-full max-w-xs p-6 rounded-2xl border border-gray-800 mb-8">
                  <div className="flex justify-between items-center mb-2"><span className="text-gray-400">Tempo</span><span className="text-white font-mono font-bold">{formatDuration(sessionTimer)}</span></div>
-                 <div className="flex justify-between items-center"><span className="text-gray-400">Volume</span><span className="text-green-400 font-mono font-bold">{calculateTotalVolume(activeSession)} Kg</span></div>
+                 <div className="flex justify-between items-center"><span className="text-gray-400">Volume</span><span className="text-green-400 font-mono font-bold">{calculateCompletedVolume(activeSession)} Kg</span></div>
              </div>
              <div className="mb-10 text-center">
                  <p className="text-sm text-gray-500 mb-4 uppercase tracking-widest">Valuta la sessione</p>
@@ -736,7 +780,7 @@ export default function App() {
 
                 <div className="mb-6 flex justify-between items-end">
                     <h2 className="text-2xl font-bold text-white leading-none">{view === 'active-workout' ? activeSession.name : (workoutData[activeDayId].name.split(':')[1] || workoutData[activeDayId].name)}</h2>
-                    {view === 'active-workout' && <div className="text-right text-xl font-mono font-bold text-green-400">{calculateTotalVolume(activeSession)} <span className="text-sm text-gray-500">kg</span></div>}
+                    {view === 'active-workout' && <div className="text-right text-xl font-mono font-bold text-green-400">{calculateCompletedVolume(activeSession)} <span className="text-sm text-gray-500">kg</span></div>}
                 </div>
 
                 <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 no-scrollbar -mx-4 px-4" ref={scrollContainerRef}>
@@ -845,15 +889,75 @@ export default function App() {
         
         {view === 'profile' && userProfile && (
             <div className="animate-in fade-in zoom-in duration-300 flex flex-col items-center justify-center py-12">
-                <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6 border-4 border-gray-800 shadow-xl relative">
+                <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6 border-4 border-gray-800 shadow-xl relative group">
                     <User className="w-10 h-10 text-gray-500" />
                     <div className="absolute bottom-0 right-0 bg-blue-600 px-2 py-1 rounded-full text-xs font-bold border-2 border-gray-900">{userProfile.age}</div>
+                    {/* Tasto Modifica Overlay */}
+                    <button 
+                        onClick={() => setIsEditingProfile(true)}
+                        className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                        <Edit2 className="w-6 h-6 text-white" />
+                    </button>
                 </div>
+
                 <h2 className="text-2xl font-bold text-white mb-1">{userProfile.name} {userProfile.surname}</h2>
                 <p className="text-gray-500 mb-6">{user.email}</p>
+
                 <div className="grid grid-cols-2 gap-4 w-full max-w-sm mb-6">
-                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 text-center"><span className="block text-gray-400 text-xs uppercase mb-1">Peso</span><span className="text-xl font-bold text-white">{userProfile.weight} <span className="text-sm font-normal text-gray-500">kg</span></span></div>
-                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 text-center"><span className="block text-gray-400 text-xs uppercase mb-1">Sesso</span><span className="text-xl font-bold text-white">{userProfile.sex}</span></div>
+                    {/* CARD PESO (Modificabile) */}
+                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 text-center relative group">
+                         <span className="block text-gray-400 text-xs uppercase mb-1">Peso</span>
+                         {isEditingProfile ? (
+                             <div className="flex items-center justify-center gap-1">
+                                 <input 
+                                    type="number" 
+                                    value={userProfile.weight} 
+                                    onChange={(e) => setUserProfile({...userProfile, weight: e.target.value})}
+                                    className="w-16 bg-gray-800 border border-blue-500 rounded text-center text-white font-bold py-1 focus:outline-none"
+                                 />
+                                 <span className="text-sm font-normal text-gray-500">kg</span>
+                             </div>
+                         ) : (
+                             <span className="text-xl font-bold text-white">{userProfile.weight} <span className="text-sm font-normal text-gray-500">kg</span></span>
+                         )}
+                    </div>
+
+                    {/* CARD SESSO (Modificabile) */}
+                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 text-center relative group">
+                        <span className="block text-gray-400 text-xs uppercase mb-1">Sesso</span>
+                        {isEditingProfile ? (
+                            <select 
+                                value={userProfile.sex} 
+                                onChange={(e) => setUserProfile({...userProfile, sex: e.target.value})}
+                                className="bg-gray-800 text-white font-bold py-1 px-2 rounded border border-blue-500 focus:outline-none"
+                            >
+                                <option value="M">M</option>
+                                <option value="F">F</option>
+                            </select>
+                        ) : (
+                            <span className="text-xl font-bold text-white">{userProfile.sex}</span>
+                        )}
+                    </div>
+                </div>
+
+                {/* BOTTONI AZIONE PROFILO */}
+                {isEditingProfile && (
+                    <div className="flex gap-3 mb-6 w-full max-w-sm">
+                        <button onClick={() => setIsEditingProfile(false)} className="flex-1 py-2 bg-gray-800 text-gray-300 rounded-lg font-semibold hover:bg-gray-700">Annulla</button>
+                        <button onClick={updateUserProfile} className="flex-1 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-500">Salva Modifiche</button>
+                    </div>
+                )}
+
+                <div className="w-full max-w-sm space-y-3">
+                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 flex justify-between items-center">
+                        <span className="text-gray-400">Allenamenti completati</span>
+                        <span className="text-xl font-bold text-white">{historyLogs.length}</span>
+                    </div>
+                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 flex justify-between items-center">
+                        <span className="text-gray-400">Tonnellaggio Totale</span>
+                        <span className="text-xl font-bold text-blue-500">{historyLogs.reduce((acc, curr) => acc + (curr.totalTonnage || 0), 0).toLocaleString()} Kg</span>
+                    </div>
                 </div>
             </div>
         )}
