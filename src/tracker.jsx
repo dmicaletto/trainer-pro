@@ -79,15 +79,7 @@ ChartJS.register(
 );
 
 // --- CONFIGURAZIONE FIREBASE ---
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyCfTXY1foD8Dr9UxRNzLeOu680aNtIw4TA",
-  authDomain: "training-c0b76.firebaseapp.com",
-  projectId: "training-c0b76",
-  storageBucket: "training-c0b76.firebasestorage.app",
-  messagingSenderId: "149618028951",
-  appId: "1:149618028951:web:eca42664d47ab6d71954d2"
-};
+const firebaseConfig = JSON.parse(localStorage.getItem('firebase_config') || '{}');
 const safeConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
 
 const app = initializeApp(safeConfig);
@@ -200,6 +192,7 @@ const chartOptions = {
 };
 
 export default function App() {
+  // --- STATO ---
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null); 
   const [loading, setLoading] = useState(true);
@@ -222,13 +215,12 @@ export default function App() {
   const scrollContainerRef = useRef(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  // Storico & Analisi
+  // Storico & Analisi (STATI DEFINITI QUI PRIMA DELL'USO)
   const [historyLogs, setHistoryLogs] = useState([]);
-  const [lastVisibleLog, setLastVisibleLog] = useState(null); // Per paginazione
+  const [lastVisibleLog, setLastVisibleLog] = useState(null); 
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [allHistoryLoaded, setAllHistoryLoaded] = useState(false);
   
-  // Dati Grafici
   const [weeklyVolumeData, setWeeklyVolumeData] = useState(null);
   const [monthlyVolumeData, setMonthlyVolumeData] = useState(null);
   const [progressionData, setProgressionData] = useState(null); 
@@ -239,7 +231,8 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // --- PERSISTENZA UTENTE ---
+  // --- FUNZIONI DI SUPPORTO E LOGICA (ORA POSSONO ACCEDERE AGLI STATI) ---
+
   const fetchUserProfile = async (userId) => {
     if (!userId || userId === 'mock-user') {
         setUserProfile({ name: "Davide", surname: "Micaletto", weight: 68, age: 52 });
@@ -276,7 +269,6 @@ export default function App() {
       } catch (e) { console.error(e); }
   };
 
-  // --- HELPER FUNCTIONS ---
   const showToast = (message, type = 'success') => {
       setToast({ show: true, message, type });
       setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
@@ -298,9 +290,11 @@ export default function App() {
   const openRestTimer = (seconds) => {
       setRestTimer({ isOpen: true, timeLeft: seconds, totalTime: seconds });
   };
+  
   const closeRestTimer = () => {
       setRestTimer({ isOpen: false, timeLeft: 0, totalTime: 0 });
   };
+  
   const scrollToExercise = (index) => {
       if (scrollContainerRef.current) {
           const container = scrollContainerRef.current;
@@ -308,24 +302,102 @@ export default function App() {
           if (child) child.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
   };
-    
-  const saveSessionLocally = (session) => {
-      if (user) {
-          localStorage.setItem(`active_session_${user.uid}`, JSON.stringify({
-              session,
-              startTime: startTime ? startTime.toISOString() : new Date().toISOString(),
-              timer: sessionTimer
-          }));
-      }
-  };
-  const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
 
+  // --- CARICAMENTO STORICO E GRAFICI ---
+  const loadHistory = async (isInitial = false) => {
+      if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
+      
+      setLoadingHistory(true);
+      try {
+          // Query SEMPLIFICATA: Solo ordinamento per data
+          let q = query(
+              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
+              orderBy("date", "desc"),
+              limit(10)
+          );
+
+          if (!isInitial && lastVisibleLog) {
+              q = query(q, startAfter(lastVisibleLog));
+          }
+
+          const querySnapshot = await getDocs(q);
+          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          // Ordinamento secondario client-side per orario se necessario
+          logs.sort((a, b) => b.startTime.localeCompare(a.startTime));
+
+          if (querySnapshot.docs.length > 0) {
+            setLastVisibleLog(querySnapshot.docs[querySnapshot.docs.length - 1]);
+            setHistoryLogs(prev => isInitial ? logs : [...prev, ...logs]);
+          } else {
+            setAllHistoryLoaded(true);
+          }
+
+      } catch (e) { console.error(e); showToast("Errore caricamento storico", 'error'); }
+      setLoadingHistory(false);
+  };
+
+  const loadChartData = async () => {
+       if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
+       try {
+           const q = query(
+              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
+              orderBy("date", "desc"),
+              limit(50)
+          );
+          const querySnapshot = await getDocs(q);
+          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
+          // Chart Settimanale (Ultimi 7 logs)
+          const weeklyLogs = logs.slice(0, 7).reverse();
+          setWeeklyVolumeData({
+              labels: weeklyLogs.map(l => l.date.slice(5)), // MM-DD
+              datasets: [{
+                  label: 'Volume (Kg)',
+                  data: weeklyLogs.map(l => l.totalTonnage),
+                  backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                  borderColor: 'rgba(59, 130, 246, 1)',
+                  borderWidth: 1,
+              }]
+          });
+          
+          // Chart Mensile
+          const last30DaysLogs = logs.filter(l => (new Date() - new Date(l.date)) / (1000 * 60 * 60 * 24) <= 30);
+          const monthlyLogs = last30DaysLogs.reverse();
+          setMonthlyVolumeData({
+               labels: monthlyLogs.map(l => l.date.slice(5)),
+               datasets: [{
+                   label: 'Volume (Kg)',
+                   data: monthlyLogs.map(l => l.totalTonnage),
+                   backgroundColor: 'rgba(16, 185, 129, 0.5)',
+                   borderColor: 'rgba(16, 185, 129, 1)',
+                   borderWidth: 1,
+               }]
+          });
+
+          // Chart Progressione
+          const progressionLogs = logs.filter(l => l.dayName && l.dayName.includes(selectedProgressionDay)).reverse();
+          setProgressionData({
+               labels: progressionLogs.map(l => l.date.slice(5)),
+               datasets: [{
+                   label: 'Progressione Volume',
+                   data: progressionLogs.map(l => l.totalTonnage),
+                   borderColor: '#10b981',
+                   backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                   tension: 0.3,
+                   fill: true
+               }]
+          });
+
+       } catch(e) { console.error(e); }
+  };
 
   // --- LOGICA ALLENAMENTO ---
   const handleSetCompletion = (exerciseIndex, setIndex) => {
       if (!activeSession) return;
       const exercise = activeSession.exercises[exerciseIndex];
       const set = exercise.sets[setIndex];
+
       if (set.completed) return; 
 
       const updatedSession = { ...activeSession };
@@ -364,7 +436,18 @@ export default function App() {
       }
   };
 
-  // --- HANDLERS ---
+  const saveSessionLocally = (session) => {
+      if (user) {
+          localStorage.setItem(`active_session_${user.uid}`, JSON.stringify({
+              session,
+              startTime: startTime ? startTime.toISOString() : new Date().toISOString(),
+              timer: sessionTimer
+          }));
+      }
+  };
+  const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
+
+  // --- HANDLERS UI ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setAuthError('');
@@ -438,7 +521,7 @@ export default function App() {
 
   const handleCancelWorkout = () => { if(!confirm("Annullare?")) return; setActiveSession(null); clearLocalSession(); setView('dashboard'); };
 
-  // --- EFFETTI ---
+  // --- EFFETTI DI INIZIALIZZAZIONE ---
   useEffect(() => {
     let unsubscribe = () => {};
     const activateMockMode = () => { setUser({ uid: "mock-user", email: "preview@gym.app", displayName: "Preview User" }); setLoading(false); };
@@ -490,107 +573,21 @@ export default function App() {
       return () => clearInterval(interval);
   }, [restTimer.isOpen, restTimer.timeLeft]);
 
-  // --- CARICAMENTO STORICO (PAGINATO) ---
-  const loadHistory = async (isInitial = false) => {
-      if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
-      
-      setLoadingHistory(true);
-      try {
-          let q = query(
-              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
-              orderBy("date", "desc"),
-              orderBy("startTime", "desc"),
-              limit(10)
-          );
-
-          if (!isInitial && lastVisibleLog) {
-              q = query(q, startAfter(lastVisibleLog));
-          }
-
-          const querySnapshot = await getDocs(q);
-          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-          setLastVisibleLog(querySnapshot.docs[querySnapshot.docs.length - 1]);
-          setHistoryLogs(prev => isInitial ? logs : [...prev, ...logs]);
-          if (querySnapshot.empty) setAllHistoryLoaded(true);
-
-      } catch (e) { console.error(e); showToast("Errore caricamento storico", 'error'); }
-      setLoadingHistory(false);
-  };
-
-  const loadChartData = async () => {
-       if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
-       try {
-           // Per i grafici carichiamo un batch più ampio ma solo i campi necessari sarebbe meglio
-           // Qui per semplicità carichiamo gli ultimi 50 per le stats
-           const q = query(
-              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
-              orderBy("date", "desc"),
-              limit(50)
-          );
-          const querySnapshot = await getDocs(q);
-          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          
-          // Chart Settimanale (Ultimi 7 logs)
-          const weeklyLogs = logs.slice(0, 7).reverse();
-          setWeeklyVolume({
-              labels: weeklyLogs.map(l => l.date.slice(5)), // MM-DD
-              datasets: [{
-                  label: 'Volume (Kg)',
-                  data: weeklyLogs.map(l => l.totalTonnage),
-                  backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                  borderColor: 'rgba(59, 130, 246, 1)',
-                  borderWidth: 1,
-              }]
-          });
-          
-          // Chart Mensile (Ultimi 30gg)
-          const last30DaysLogs = logs.filter(l => (new Date() - new Date(l.date)) / (1000 * 60 * 60 * 24) <= 30);
-          const monthlyLogs = last30DaysLogs.reverse();
-          setMonthlyVolume({
-               labels: monthlyLogs.map(l => l.date.slice(5)),
-               datasets: [{
-                   label: 'Volume (Kg)',
-                   data: monthlyLogs.map(l => l.totalTonnage),
-                   backgroundColor: 'rgba(16, 185, 129, 0.5)',
-                   borderColor: 'rgba(16, 185, 129, 1)',
-                   borderWidth: 1,
-               }]
-          });
-
-          // Chart Progressione (Giorno Selezionato)
-          const progressionLogs = logs.filter(l => l.dayName && l.dayName.includes(selectedProgressionDay)).reverse();
-          setProgressionData({
-               labels: progressionLogs.map(l => l.date.slice(5)),
-               datasets: [{
-                   label: 'Progressione Volume',
-                   data: progressionLogs.map(l => l.totalTonnage),
-                   borderColor: '#10b981',
-                   backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                   tension: 0.3,
-                   fill: true
-               }]
-          });
-
-       } catch(e) { console.error(e); }
-  };
-
+  // Gestione caricamento dati Storico/Grafici al cambio view
   useEffect(() => {
       if (view === 'history') {
           if(!['mock-user', 'test-user'].includes(user?.uid)) {
-              setHistoryLogs([]); // Reset
-              setLastVisibleLog(null);
-              setAllHistoryLoaded(false);
-              loadHistory(true);
+              // Reset per evitare flash di dati vecchi
+              if(historyLogs.length === 0) loadHistory(true);
               loadChartData();
           } else {
-              // Mock
+              // Mock Data
               const mData = {
                   labels: ['01-01', '01-04', '01-06', '01-08'],
                   datasets: [{ label: 'Volume (Kg)', data: [4200, 5100, 6200, 4500], backgroundColor: 'rgba(59, 130, 246, 0.5)' }]
               };
-              setWeeklyVolumeData(mData); // Corrected function name
-              setMonthlyVolumeData(mData); // Corrected function name
+              setWeeklyVolumeData(mData);
+              setMonthlyVolumeData(mData);
               setProgressionData(mData);
               setHistoryLogs([
                   { id: '1', dayName: 'Petto', date: '2025-01-08', durationDisplay: '00:45', totalTonnage: 4500, rating: 4 },
@@ -599,7 +596,6 @@ export default function App() {
           }
       }
   }, [view, user, selectedProgressionDay]);
-
 
   if (loading && view !== 'active-workout') return <div className="min-h-screen bg-gray-950 flex items-center justify-center"><div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
 
@@ -635,12 +631,9 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-4 h-16 flex justify-between items-center">
             {view === 'active-workout' ? (
                 <div className="flex items-center justify-between w-full">
-                    {/* Pulsante Annulla (Sinistra) */}
                     <button onClick={handleCancelWorkout} className="text-xs text-red-400 font-semibold border border-red-900/50 px-3 py-1 rounded-full hover:bg-red-900/10 flex items-center gap-1">
                         <X className="w-3 h-3" /> ESCI
                     </button>
-                    
-                    {/* Timer e Volume (Centro/Destra) */}
                     <div className="flex flex-col items-end">
                          <div className="flex items-center text-blue-400 font-mono text-lg font-bold animate-pulse">
                             <Timer className="w-4 h-4 mr-1" />
