@@ -112,7 +112,7 @@ const INITIAL_WORKOUT_DAYS = {
                     { reps: 8, weight: 55, completed: false }
                 ],
                 rest: "90s", 
-                imageUrl: 'https://i.imgur.com/3Y8kE9A.gif', 
+                imageUrl: './images/panca-piana.gif', 
                 notes: "Mantieni le spalle basse e concentratevi solo sulla contrazione del petto." 
             },
 			{ 
@@ -124,12 +124,18 @@ const INITIAL_WORKOUT_DAYS = {
                     { reps: 10, weight: 40, completed: false }
                 ], 
                 rest: "90s", 
-                imageUrl: '', 
+                imageUrl: './images/panca-multypower.gif', 
                 notes: "Movimento controllato, senti l'allungamento." 
             },
-            { id: 'd1_e3', name: "Croci al Cavo alto", sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "60s", imageUrl: '', notes: "Contrazione di picco." },
-            { id: 'd1_e4', name: "Chest Press", sets: Array(3).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: '', notes: "Spingi i gomiti in avanti." },
-            { id: 'd1_e5', name: "Pull Over", sets: Array(3).fill({reps: 12, weight: 20, completed: false}), rest: "90s", imageUrl: '', notes: "" },
+			{ id: 'd1_e3', name: "Croci al Cavo alto", sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "60s", 
+			 	imageUrl: './images/Croci-ai-cavi-alti.gif', notes: "Contrazione di picco." },
+            { id: 'd1_e4', name: "Chest Press", sets: Array(3).fill({reps: 10, weight: 25, completed: false}), rest: "90s", 
+			 	imageUrl: './images/Chest-Press-Machine.gif', notes: "Spingi i gomiti in avanti." },
+            { id: 'd1_e5', name: "Pull Over", sets: Array(3).fill({reps: 12, weight: 20, completed: false}), rest: "90s", imageUrl: './images/pullover.gif', notes: "" },
+			{ id: 'd1_e6', name: "Spinte in Basso (Pushdown)", sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "90s", imageUrl: './images/pushdown.png', notes: "" },
+			{ id: 'd1_e7', name: "French Press (Manubri) panca 30°", sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "90s", imageUrl: './images/french-press.png', notes: "" },
+			{ id: 'd1_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
+			{ id: 'd1_e8', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
 	},
 	'day_2': {
