@@ -1,6 +1,6 @@
 {
-  "appId": "com.rifugio.incantato",
-  "appName": "Il Rifugio Incantato",
+  "appId": "com.dmicaletto.trainerpro",
+  "appName": "TrainerPRO Gym App",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"
