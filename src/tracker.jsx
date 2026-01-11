@@ -135,26 +135,37 @@ const INITIAL_WORKOUT_DAYS = {
 			{ id: 'd1_e6', name: "Spinte in Basso (Pushdown)", sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "90s", imageUrl: './images/pushdown.png', notes: "" },
 			{ id: 'd1_e7', name: "French Press (Manubri) panca 30°", sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "90s", imageUrl: './images/french-press.png', notes: "" },
 			{ id: 'd1_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
-			{ id: 'd1_e8', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
+			{ id: 'd1_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
 	},
 	'day_2': {
 		name: "Giorno 2: Gambe e Spalle",
 		exercises: [
-			{ id: 'd2_e1', name: "Calf Raises", sets: Array(4).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: '', notes: "" },
-            { id: 'd2_e2', name: "Leg Press", sets: Array(4).fill({reps: 10, weight: 70, completed: false}), rest: "90s", imageUrl: '', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e1', name: "Calf Raises on leg press", sets: Array(4).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: './images/Calf-Press-on-Leg-Press-Machine.gif', notes: "" },
+            { id: 'd2_e2', name: "Leg Press", sets: Array(4).fill({reps: 10, weight: 70, completed: false}), rest: "90s", imageUrl: './images/leg-press.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e3', name: "Leg Extension", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: './images/legext.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e4', name: "Leg Curl Sdraiato", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: './images/leg-curl-sdraiato-bg.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e5', name: "Lento avanti panca 70°", sets: Array(4).fill({reps: 10, weight: 14, completed: false}), rest: "90s", imageUrl: './images/lento-manubri.gif', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e6', name: "Alzate Laterali", sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/alzate-laterali.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e7', name: "Alzate posteriori su panca", sets: Array(4).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/inverso-manubri-panca-alta-bg.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
+			{ id: 'd2_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
 	},
     'day_3': {
 		name: "Giorno 3: Schiena e Bicipiti",
 		exercises: [
 			{ id: 'd3_e1', name: "Rematore Manubri", sets: Array(4).fill({reps: 8, weight: 18, completed: false}), rest: "90s", imageUrl: '', notes: "Schiena dritta." },
+			{ id: 'd3_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
+			{ id: 'd3_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
 	},
     'day_4': {
 		name: "Giorno 4: Petto e Spalle (Richiamo)",
 		exercises: [
 			{ id: 'd4_e1', name: "Panca Piana Manubri", sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: '', notes: "" },
+			{ id: 'd4_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
+			{ id: 'd4_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
 	}
 };
