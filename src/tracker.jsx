@@ -157,7 +157,7 @@ const INITIAL_WORKOUT_DAYS = {
 		exercises: [
 			{ id: 'd3_e1', name: "Rematore Manubri", sets: Array(4).fill({reps: 10, weight: 18, completed: false}), rest: "90s", imageUrl: './images/rematore-manubrio.gif', notes: "Schiena dritta." },
 			{ id: 'd3_e2', name: "Lat Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: './images/lat-machine.png', notes: "Schiena dritta." },
-			{ id: 'd3_e3', name: "Pulley basso con Triangolo", sets: Array(4).fill({reps: 8, weight: 30, completed: false}), rest: "90s", imageUrl: './images/pulley-basso.png', notes: "Petto in fuori, schiena inarcata. Porta il triangolo all'ombelico." }
+			{ id: 'd3_e3', name: "Pulley basso con Triangolo", sets: Array(4).fill({reps: 8, weight: 30, completed: false}), rest: "90s", imageUrl: './images/pulley-basso.png', notes: "Petto in fuori, schiena inarcata. Porta il triangolo all'ombelico." },
 			{ id: 'd3_e4', name: "Row Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: './images/Row-Machine.gif', notes: "Schiena dritta." },
 			{ id: 'd3_e5', name: "Curl seduto con Manubri", sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/curl-manubri-seduto-bg.png', notes: "Schiena dritta." },
 			{ id: 'd3_e6', name: "Hammer curl in piedi", sets: Array(4).fill({reps: 10, weight: 15, completed: false}), rest: "90s", imageUrl: './images/hammer-curl.png', notes: "Schiena dritta." },
