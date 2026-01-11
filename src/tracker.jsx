@@ -155,7 +155,13 @@ const INITIAL_WORKOUT_DAYS = {
     'day_3': {
 		name: "Giorno 3: Schiena e Bicipiti",
 		exercises: [
-			{ id: 'd3_e1', name: "Rematore Manubri", sets: Array(4).fill({reps: 8, weight: 18, completed: false}), rest: "90s", imageUrl: '', notes: "Schiena dritta." },
+			{ id: 'd3_e1', name: "Rematore Manubri", sets: Array(4).fill({reps: 10, weight: 18, completed: false}), rest: "90s", imageUrl: './images/rematore-manubrio.gif', notes: "Schiena dritta." },
+			{ id: 'd3_e2', name: "Lat Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: './images/lat-machine.png', notes: "Schiena dritta." }
+			{ id: 'd3_e3', name: "Pulley basso con Triangolo", sets: Array(4).fill({reps: 8, weight: 30, completed: false}), rest: "90s", imageUrl: './images/pulley-basso.png', notes: "Petto in fuori, schiena inarcata. Porta il triangolo all'ombelico." }
+			{ id: 'd3_e4', name: "Row Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: './images/Row-Machine.gif', notes: "Schiena dritta." }
+			{ id: 'd3_e5', name: "Curl seduto con Manubri", sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/curl-manubri-seduto-bg.png', notes: "Schiena dritta." }
+			{ id: 'd3_e6', name: "Hammer curl in piedi", sets: Array(4).fill({reps: 10, weight: 15, completed: false}), rest: "90s", imageUrl: './images/hammer-curl.png', notes: "Schiena dritta." }
+			{ id: 'd3_e7', name: "Trazioni alla sbarra Chin Up", sets: Array(4).fill({reps: 10, weight: 48, completed: false}), rest: "90s", imageUrl: './images/chin-up.gif', notes: "Schiena dritta." }
 			{ id: 'd3_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
 			{ id: 'd3_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
@@ -164,8 +170,13 @@ const INITIAL_WORKOUT_DAYS = {
 		name: "Giorno 4: Petto e Spalle (Richiamo)",
 		exercises: [
 			{ id: 'd4_e1', name: "Panca Piana Manubri", sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: '', notes: "" },
-			{ id: 'd4_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
-			{ id: 'd4_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
+			{ id: 'd4_e2', name: "Chest Press distensioni delle braccia", sets: Array(3).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: './images/chestpress.png', notes: "" },
+			{ id: 'd4_e3', name: "Panca Inclinata Manubri", sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: './images/spinte-panca-alta-manubri.png', notes: "inclinata 30 gradi" },
+			{ id: 'd4_e4', name: "Alzate Laterali", sets: Array(3).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/alzate-laterali.png', notes: "" },
+			{ id: 'd4_e5', name: "Alzate Frontali", sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/alzate-frontali.png', notes: "" },
+			{ id: 'd4_e6', name: "Alzate Posteriori su panca", sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/inverso-manubri-panca-alta-bg.png', notes: "" },
+			{ id: 'd4_e7', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
+			{ id: 'd4_e8', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
 	}
 };
