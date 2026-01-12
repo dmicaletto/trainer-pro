@@ -2,15 +2,14 @@ name: Build Android APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build APK
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -18,53 +17,69 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
 
-      # Installazione pulita delle dipendenze npm
+      # Usa Temurin invece di Zulu per migliore compatibilità Android
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Install Dependencies
-        run: npm install --no-package-lock
+        run: npm install
 
-      # Installazione capacitor core se manca
-      - name: Install Capacitor (Fallback)
-        run: |
-          npm install @capacitor/core
-          npm install -D @capacitor/cli @capacitor/android
+      # Installa Capacitor CLI globalmente nel runner per sicurezza
+      - name: Ensure Capacitor CLI
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Build Web App
         run: npm run build
 
-      - name: Initialize Capacitor
+      # Inizializza Capacitor solo se non è già stato fatto
+      - name: Init Capacitor (if needed)
         run: |
-          if [ ! -f "capacitor.config.json" ]; then
-            npx cap init "Gym App" "com.gymapp.tracker" --web-dir dist --bundledWebRuntime false
+          if [ ! -f "capacitor.config.json" ] && [ ! -f "capacitor.config.ts" ]; then
+            npx cap init NutriAI com.nutriai.app --web-dir dist
           fi
 
-      - name: Add Android Platform
+      # Aggiunge Android se manca, altrimenti sincronizza
+      - name: Add/Sync Android Platform
         run: |
           if [ ! -d "android" ]; then
             npx cap add android
+          else
+            npx cap sync android
           fi
 
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Build APK with Gradle
-        # FIX: Aumento memoria e disabilito demone per evitare crash su CI
+      # Gestione google-services.json (Reale o Dummy per evitare crash build)
+      - name: Create google-services.json
         env:
-          GRADLE_OPTS: "-Xmx4g -Dorg.gradle.daemon=false"
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            echo "✅ google-services.json creato."
+          else
+            echo "⚠️ Segreto mancante. Creazione dummy file."
+            echo '{"project_info":{"project_number":"000000000000","project_id":"dummy","storage_bucket":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:000000000000","android_client_info":{"package_name":"com.nutriai.app"}},"api_key":[{"current_key":"dummy"}]}]}' > android/app/google-services.json
+          fi
+
+      # Setup Gradle Action (Cache intelligente)
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          build-root-directory: android
+
+      # Build APK con flag per risolvere problemi di rete/cache
+      - name: Build APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew clean assembleDebug --stacktrace
+          ./gradlew assembleDebug --refresh-dependencies --stacktrace
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: gym-app-debug
+          name: NutriAI-App-Debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
