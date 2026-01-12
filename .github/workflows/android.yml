@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: 20
 
-      # Java 21 è corretto per le build recenti
+      # Java 21 per compatibilità con le ultime versioni di Android/Gradle
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -49,13 +49,37 @@ jobs:
             npx cap sync android
           fi
 
-      # --- FIX PER ERRORI DI CLASSI DUPLICATE KOTLIN ---
-      # Questo step crea uno script Gradle che forza l'uso di una versione unica di Kotlin
-      # per evitare conflitti tra stdlib-1.8.x e stdlib-jdk8-1.6.x
-      - name: Apply Kotlin Version Fix
+      # --- FIX PER ERRORI DUPLICATE CLASSES (Versione Aggressiva) ---
+      # Questo step inietta regole nel build.gradle per impedire il download
+      # delle vecchie librerie jdk7/jdk8 che ora sono incluse nella stdlib.
+      - name: Apply Kotlin Duplicate Classes Fix
         run: |
           cd android
-          echo "configurations.all { resolutionStrategy { eachDependency { DependencyResolveDetails details -> if (details.requested.group == 'org.jetbrains.kotlin') { details.useVersion '1.8.22' } } } }" >> build.gradle
+          # Aggiunge configurazione per gestire i conflitti di versione
+          echo "" >> build.gradle
+          echo "configurations.all {" >> build.gradle
+          echo "    resolutionStrategy.eachDependency { details ->" >> build.gradle
+          echo "        if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name.startsWith('kotlin-stdlib')) {" >> build.gradle
+          echo "            details.useVersion '1.8.22'" >> build.gradle
+          echo "        }" >> build.gradle
+          echo "    }" >> build.gradle
+          echo "}" >> build.gradle
+          
+          # Modifica il file app/build.gradle per escludere esplicitamente i moduli duplicati
+          # Nota: Questo comando usa sed per inserire le esclusioni nel blocco dependencies se esiste,
+          # oppure le aggiunge alla fine se è più sicuro.
+          # Qui usiamo un approccio che modifica le capabilities per risolvere il conflitto
+          echo "" >> app/build.gradle
+          echo "dependencies {" >> app/build.gradle
+          echo "    modules {" >> app/build.gradle
+          echo "        module(\"org.jetbrains.kotlin:kotlin-stdlib-jdk7\") {" >> app/build.gradle
+          echo "            replacedBy(\"org.jetbrains.kotlin:kotlin-stdlib\", \"kotlin-stdlib-jdk7 is now part of kotlin-stdlib\")" >> app/build.gradle
+          echo "        }" >> app/build.gradle
+          echo "        module(\"org.jetbrains.kotlin:kotlin-stdlib-jdk8\") {" >> app/build.gradle
+          echo "            replacedBy(\"org.jetbrains.kotlin:kotlin-stdlib\", \"kotlin-stdlib-jdk8 is now part of kotlin-stdlib\")" >> app/build.gradle
+          echo "        }" >> app/build.gradle
+          echo "    }" >> app/build.gradle
+          echo "}" >> app/build.gradle
 
       - name: Create google-services.json
         env:
