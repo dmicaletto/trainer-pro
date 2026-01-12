@@ -181,7 +181,7 @@ const INITIAL_WORKOUT_DAYS = {
 	}
 };
 const getImageUrl = (url, name) => {
-    if (url && (url.startsWith('http') || url.startsWith('/'))) return url;
+    if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
 };
 
