@@ -37,10 +37,11 @@ jobs:
         run: npm run build
 
       # Inizializza Capacitor solo se non è già stato fatto
+      # FIX: Aggiornato ID pacchetto per corrispondere a quello dell'utente
       - name: Init Capacitor (if needed)
         run: |
           if [ ! -f "capacitor.config.json" ] && [ ! -f "capacitor.config.ts" ]; then
-            npx cap init NutriAI com.nutriai.app --web-dir dist
+            npx cap init NutriAI com.dmicaletto.trainerpro --web-dir dist
           fi
 
       # Aggiunge Android se manca, altrimenti sincronizza
@@ -53,16 +54,17 @@ jobs:
           fi
 
       # Gestione google-services.json (Reale o Dummy per evitare crash build)
+      # FIX: Aggiornato dummy file con il package name corretto 'com.dmicaletto.trainerpro'
       - name: Create google-services.json
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
             echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
-            echo "✅ google-services.json creato."
+            echo "✅ google-services.json creato dal secret."
           else
-            echo "⚠️ Segreto mancante. Creazione dummy file."
-            echo '{"project_info":{"project_number":"000000000000","project_id":"dummy","storage_bucket":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:000000000000","android_client_info":{"package_name":"com.nutriai.app"}},"api_key":[{"current_key":"dummy"}]}]}' > android/app/google-services.json
+            echo "⚠️ Segreto mancante. Creazione dummy file con ID corretto."
+            echo '{"project_info":{"project_number":"000000000000","project_id":"dummy","storage_bucket":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:000000000000","android_client_info":{"package_name":"com.dmicaletto.trainerpro"}},"api_key":[{"current_key":"dummy"}]}]}' > android/app/google-services.json
           fi
 
       # Setup Gradle Action (Cache intelligente)
@@ -81,5 +83,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NutriAI-App-Debug
+          name: TrainerPro-App-Debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
