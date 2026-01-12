@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: 20
 
-      # FIX CRITICO: Aggiornato a Java 21 per risolvere "invalid source release: 21"
+      # Java 21 è corretto per le build recenti
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -29,21 +29,18 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      # Installa Capacitor CLI globalmente nel runner per sicurezza
       - name: Ensure Capacitor CLI
         run: npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Build Web App
         run: npm run build
 
-      # Inizializza Capacitor solo se non è già stato fatto
       - name: Init Capacitor (if needed)
         run: |
           if [ ! -f "capacitor.config.json" ] && [ ! -f "capacitor.config.ts" ]; then
             npx cap init NutriAI com.dmicaletto.trainerpro --web-dir dist
           fi
 
-      # Aggiunge Android se manca, altrimenti sincronizza
       - name: Add/Sync Android Platform
         run: |
           if [ ! -d "android" ]; then
@@ -52,31 +49,36 @@ jobs:
             npx cap sync android
           fi
 
-      # Gestione google-services.json (Reale o Dummy per evitare crash build)
+      # --- FIX PER ERRORI DI CLASSI DUPLICATE KOTLIN ---
+      # Questo step crea uno script Gradle che forza l'uso di una versione unica di Kotlin
+      # per evitare conflitti tra stdlib-1.8.x e stdlib-jdk8-1.6.x
+      - name: Apply Kotlin Version Fix
+        run: |
+          cd android
+          echo "configurations.all { resolutionStrategy { eachDependency { DependencyResolveDetails details -> if (details.requested.group == 'org.jetbrains.kotlin') { details.useVersion '1.8.22' } } } }" >> build.gradle
+
       - name: Create google-services.json
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
             echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
-            echo "✅ google-services.json creato dal secret."
+            echo "✅ google-services.json creato."
           else
-            echo "⚠️ Segreto mancante. Creazione dummy file con ID corretto."
+            echo "⚠️ Segreto mancante. Creazione dummy file."
             echo '{"project_info":{"project_number":"000000000000","project_id":"dummy","storage_bucket":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:000000000000","android_client_info":{"package_name":"com.dmicaletto.trainerpro"}},"api_key":[{"current_key":"dummy"}]}]}' > android/app/google-services.json
           fi
 
-      # Setup Gradle Action (Cache intelligente)
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           build-root-directory: android
 
-      # Build APK con flag per risolvere problemi di rete/cache
       - name: Build APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --refresh-dependencies --stacktrace
+          ./gradlew assembleDebug --refresh-dependencies
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
