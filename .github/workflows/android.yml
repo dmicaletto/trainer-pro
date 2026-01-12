@@ -19,10 +19,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          # RIMOSSO: cache: 'npm' per evitare l'errore del lock file mancante
 
       - name: Install Dependencies
-        # MODIFICATO: Usa install normale invece di ci (clean install) che richiede il lock file
         run: npm install --no-package-lock
 
       - name: Install Capacitor (Fallback)
@@ -48,17 +46,19 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Setup Java (JDK 17)
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
       - name: Build APK with Gradle
+        # Aggiunto --no-daemon e --stacktrace per stabilità e debug
+        # Aggiunto 'clean' per evitare cache corrotte
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
