@@ -51,7 +51,8 @@ import {
   ChevronDown,
   Edit2,
   Maximize2,
-  Database // Icona per migrazione
+  Database,
+  RefreshCw 
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -97,8 +98,10 @@ const app = initializeApp(safeConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ID App per la struttura del DB
+// ID App (Fondamentale per trovare i vecchi dati)
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
+// Vecchio User ID noto (da cui recuperare i dati se necessario)
+const LEGACY_USER_ID = "wtdiFBHzWQblPjhPxgk0OVSbI4o2";
 
 // --- DATI INIZIALI (Template) ---
 const INITIAL_WORKOUT_DAYS = {
@@ -183,7 +186,6 @@ const INITIAL_WORKOUT_DAYS = {
 		]
 	}
 };
-
 const getImageUrl = (url, name) => {
     if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
@@ -203,11 +205,9 @@ const formatDuration = (seconds) => {
 
 // --- HELPER DI SANITIZZAZIONE ---
 const sanitizeData = (data) => {
-    // Sostituisce undefined con null ricorsivamente per compatibilità Firestore
     if (data === undefined) return null;
     if (data === null || typeof data !== 'object') return data;
     if (Array.isArray(data)) return data.map(sanitizeData);
-    
     const sanitized = {};
     for (const key in data) {
         if (data[key] === undefined) {
@@ -274,7 +274,7 @@ export default function App() {
   const scrollContainerRef = useRef(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  // Storico & Analisi
+  // Storico & Analisi (STATI DEFINITI QUI PRIMA DELL'USO)
   const [historyLogs, setHistoryLogs] = useState([]);
   const [lastVisibleLog, setLastVisibleLog] = useState(null); 
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -290,7 +290,12 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // --- FUNZIONI DI SUPPORTO E LOGICA ---
+  // --- FUNZIONI DI SUPPORTO E LOGICA (Definite prima dell'uso) ---
+
+  const showToast = (message, type = 'success') => {
+      setToast({ show: true, message, type });
+      setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
+  };
 
   const fetchUserProfile = async (userId) => {
     if (!userId || userId === 'mock-user') {
@@ -340,7 +345,7 @@ export default function App() {
   const saveDefaultToFirestore = async (userId, exerciseId, setIndex, field, value) => {
       if (!userId || userId === 'mock-user') return;
       try {
-          // Sanitizzazione fondamentale per evitare errore 'undefined'
+          // Sanitizzazione fondamentale
           if (value === undefined) value = null;
 
           const docRef = doc(db, `artifacts/${APP_ID}/users/${userId}/data`, 'workout_defaults');
@@ -354,24 +359,6 @@ export default function App() {
           // Sanitizza tutto l'oggetto prima di salvare
           await setDoc(docRef, sanitizeData(currentDefaults), { merge: true });
       } catch (e) { console.error("Defaults Save Error:", e); }
-  };
-
-  // Funzione di utilità per migrare manualmente i dati (One-shot)
-  const migrateLocalData = async () => {
-      if (!user || user.uid === 'mock-user') return;
-      if (!confirm("Vuoi importare lo storico salvato localmente su Firebase?")) return;
-      
-      // Qui potresti leggere dal localStorage e salvare su Firestore se necessario
-      // Esempio:
-      // const localHistory = JSON.parse(localStorage.getItem('my_old_history') || '[]');
-      // for(const log of localHistory) { await addDoc(..., log); }
-      
-      showToast("Funzione migrazione pronta (codice da attivare)", 'info');
-  };
-
-  const showToast = (message, type = 'success') => {
-      setToast({ show: true, message, type });
-      setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
 
   const calculateCompletedVolume = (session) => {
@@ -427,12 +414,140 @@ export default function App() {
   };
   const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
 
-  // --- RESET SCROLL EFFETTO ---
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTo({ left: 0, behavior: 'instant' });
+  // --- CARICAMENTO STORICO E GRAFICI (Definite qui per lo scope) ---
+  const loadHistory = async (isInitial = false) => {
+      if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
+      
+      setLoadingHistory(true);
+      try {
+          // Query SEMPLIFICATA
+          let q = query(
+              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
+              orderBy("date", "desc"),
+              limit(10)
+          );
+
+          if (!isInitial && lastVisibleLog) {
+              q = query(q, startAfter(lastVisibleLog));
+          }
+
+          const querySnapshot = await getDocs(q);
+          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          // Ordinamento secondario client-side
+          logs.sort((a, b) => b.startTime.localeCompare(a.startTime));
+
+          if (querySnapshot.docs.length > 0) {
+            setLastVisibleLog(querySnapshot.docs[querySnapshot.docs.length - 1]);
+            setHistoryLogs(prev => isInitial ? logs : [...prev, ...logs]);
+          } else {
+            setAllHistoryLoaded(true);
+          }
+
+      } catch (e) { console.error(e); showToast("Errore caricamento storico", 'error'); }
+      setLoadingHistory(false);
+  };
+
+  const loadChartData = async () => {
+       if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
+       try {
+           const q = query(
+              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
+              orderBy("date", "desc"),
+              limit(50)
+          );
+          const querySnapshot = await getDocs(q);
+          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
+          // Chart Settimanale
+          const weeklyLogs = logs.slice(0, 7).reverse();
+          setWeeklyVolumeData({
+              labels: weeklyLogs.map(l => l.date.slice(5)), // MM-DD
+              datasets: [{
+                  label: 'Volume (Kg)',
+                  data: weeklyLogs.map(l => l.totalTonnage),
+                  backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                  borderColor: 'rgba(59, 130, 246, 1)',
+                  borderWidth: 1,
+              }]
+          });
+          
+          // Chart Mensile
+          const last30DaysLogs = logs.filter(l => (new Date() - new Date(l.date)) / (1000 * 60 * 60 * 24) <= 30);
+          const monthlyLogs = last30DaysLogs.reverse();
+          setMonthlyVolumeData({
+               labels: monthlyLogs.map(l => l.date.slice(5)),
+               datasets: [{
+                   label: 'Volume (Kg)',
+                   data: monthlyLogs.map(l => l.totalTonnage),
+                   backgroundColor: 'rgba(16, 185, 129, 0.5)',
+                   borderColor: 'rgba(16, 185, 129, 1)',
+                   borderWidth: 1,
+               }]
+          });
+
+          // Chart Progressione
+          const progressionLogs = logs.filter(l => l.dayName && l.dayName.includes(selectedProgressionDay)).reverse();
+          setProgressionData({
+               labels: progressionLogs.map(l => l.date.slice(5)),
+               datasets: [{
+                   label: 'Progressione Volume',
+                   data: progressionLogs.map(l => l.totalTonnage),
+                   borderColor: '#10b981',
+                   backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                   tension: 0.3,
+                   fill: true
+               }]
+          });
+
+       } catch(e) { console.error(e); }
+  };
+  
+  // Funzione per recuperare i dati dalla vecchia app (Legacy)
+  const recoverLegacyData = async () => {
+    if (!user || user.uid === 'mock-user') return;
+    
+    // Controlla se siamo già loggati con l'ID legacy o se dobbiamo copiare da un altro ID
+    // In questo scenario, proviamo a copiare dalla collezione legacy specifica se l'utente corrente è diverso
+    if (user.uid === LEGACY_USER_ID) {
+        showToast("Sei già loggato con l'utente storico.", 'info');
+        loadHistory(true);
+        return;
     }
-  }, [activeDayId]);
+    
+    if(!confirm("Vuoi tentare di recuperare i dati dalla vecchia app?")) return;
+    
+    setLoading(true);
+    try {
+        // Leggi dalla collezione legacy
+        const legacyRef = collection(db, `artifacts/${APP_ID}/users/${LEGACY_USER_ID}/workout_history`);
+        const snapshot = await getDocs(legacyRef);
+        
+        if (snapshot.empty) {
+            showToast("Nessun dato trovato da recuperare.", 'error');
+            setLoading(false);
+            return;
+        }
+        
+        let count = 0;
+        // Copia nel nuovo utente
+        for (const docSnap of snapshot.docs) {
+            const data = docSnap.data();
+            // Aggiungi solo se non esiste (logica base, qui aggiungiamo sempre per semplicità, ma in prod andrebbe controllato)
+            await addDoc(collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`), data);
+            count++;
+        }
+        
+        showToast(`Recuperati ${count} allenamenti!`, 'success');
+        loadHistory(true);
+        loadChartData();
+        
+    } catch (e) {
+        console.error("Recovery error:", e);
+        showToast("Errore durante il recupero.", 'error');
+    }
+    setLoading(false);
+  };
 
   // --- LOGICA ALLENAMENTO ---
   const handleSetCompletion = (exerciseIndex, setIndex) => {
@@ -590,6 +705,12 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+      if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({ left: 0, behavior: 'instant' });
+      }
+  }, [activeDayId]);
+
+  useEffect(() => {
       let interval;
       if (view === 'active-workout' && !finishModalOpen) {
           interval = setInterval(() => { setSessionTimer(t => { const newVal = t + 1; if (newVal % 5 === 0 && activeSession) saveSessionLocally(activeSession); return newVal; }); }, 1000);
@@ -705,8 +826,8 @@ export default function App() {
                 </div>
                 <div className="mt-auto pt-4 border-t border-gray-800">
                     <button onClick={handleLogout} className="w-full flex items-center p-3 rounded-xl text-red-400 hover:bg-red-500/10"><LogOut className="w-5 h-5 mr-3" />Esci</button>
-                    {/* Bottone Migrazione (per debug/recupero) */}
-                    <button onClick={migrateLocalData} className="w-full flex items-center p-3 rounded-xl text-gray-500 hover:bg-gray-800 transition-colors mt-2 text-sm"><Database className="w-4 h-4 mr-3" /> Recupera Dati</button>
+                    {/* Bottone Migrazione (per recupero dati vecchi) */}
+                    <button onClick={recoverLegacyData} className="w-full flex items-center p-3 rounded-xl text-yellow-500 hover:bg-gray-800 transition-colors mt-2 text-sm"><RefreshCw className="w-4 h-4 mr-3" /> Recupera Dati Vecchi</button>
                 </div>
               </div>
           </div>
