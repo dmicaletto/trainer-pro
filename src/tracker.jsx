@@ -19,7 +19,8 @@ import {
   setDoc,
   doc,
   getDoc,
-  startAfter
+  startAfter,
+  serverTimestamp
 } from "firebase/firestore";
 import { 
   Menu, 
@@ -49,7 +50,8 @@ import {
   Filter,
   ChevronDown,
   Edit2,
-  Maximize2
+  Maximize2,
+  Database // Icona per migrazione
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -80,7 +82,7 @@ ChartJS.register(
   Filler
 );
 
-// Your web app's Firebase configuration
+// --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyCfTXY1foD8Dr9UxRNzLeOu680aNtIw4TA",
   authDomain: "training-c0b76.firebaseapp.com",
@@ -199,6 +201,24 @@ const formatDuration = (seconds) => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
+// --- HELPER DI SANITIZZAZIONE ---
+const sanitizeData = (data) => {
+    // Sostituisce undefined con null ricorsivamente per compatibilità Firestore
+    if (data === undefined) return null;
+    if (data === null || typeof data !== 'object') return data;
+    if (Array.isArray(data)) return data.map(sanitizeData);
+    
+    const sanitized = {};
+    for (const key in data) {
+        if (data[key] === undefined) {
+            sanitized[key] = null;
+        } else {
+            sanitized[key] = sanitizeData(data[key]);
+        }
+    }
+    return sanitized;
+};
+
 // --- CONFIGURAZIONE GRAFICI CHART.JS ---
 const chartOptions = {
     responsive: true,
@@ -270,7 +290,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // --- FUNZIONI DI SUPPORTO E LOGICA (Definite prima dell'uso) ---
+  // --- FUNZIONI DI SUPPORTO E LOGICA ---
 
   const fetchUserProfile = async (userId) => {
     if (!userId || userId === 'mock-user') {
@@ -292,13 +312,13 @@ export default function App() {
     }
     try {
         const profileRef = doc(db, `artifacts/${APP_ID}/users/${user.uid}/profiles_meta`, 'data');
-        await setDoc(profileRef, userProfile, { merge: true });
+        await setDoc(profileRef, sanitizeData(userProfile), { merge: true });
         
         const weightLog = {
             date: new Date().toISOString(),
             weight: Number(userProfile.weight)
         };
-        await addDoc(collection(db, `artifacts/${APP_ID}/users/${user.uid}/weight_history`), weightLog);
+        await addDoc(collection(db, `artifacts/${APP_ID}/users/${user.uid}/weight_history`), sanitizeData(weightLog));
 
         setIsEditingProfile(false);
         showToast("Profilo aggiornato!", 'success');
@@ -320,6 +340,9 @@ export default function App() {
   const saveDefaultToFirestore = async (userId, exerciseId, setIndex, field, value) => {
       if (!userId || userId === 'mock-user') return;
       try {
+          // Sanitizzazione fondamentale per evitare errore 'undefined'
+          if (value === undefined) value = null;
+
           const docRef = doc(db, `artifacts/${APP_ID}/users/${userId}/data`, 'workout_defaults');
           const currentDefaults = await fetchUserDefaults(userId);
           
@@ -328,8 +351,22 @@ export default function App() {
           
           currentDefaults[exerciseId][setIndex][field] = value;
           
-          await setDoc(docRef, currentDefaults, { merge: true });
-      } catch (e) { console.error(e); }
+          // Sanitizza tutto l'oggetto prima di salvare
+          await setDoc(docRef, sanitizeData(currentDefaults), { merge: true });
+      } catch (e) { console.error("Defaults Save Error:", e); }
+  };
+
+  // Funzione di utilità per migrare manualmente i dati (One-shot)
+  const migrateLocalData = async () => {
+      if (!user || user.uid === 'mock-user') return;
+      if (!confirm("Vuoi importare lo storico salvato localmente su Firebase?")) return;
+      
+      // Qui potresti leggere dal localStorage e salvare su Firestore se necessario
+      // Esempio:
+      // const localHistory = JSON.parse(localStorage.getItem('my_old_history') || '[]');
+      // for(const log of localHistory) { await addDoc(..., log); }
+      
+      showToast("Funzione migrazione pronta (codice da attivare)", 'info');
   };
 
   const showToast = (message, type = 'success') => {
@@ -390,94 +427,12 @@ export default function App() {
   };
   const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
 
-  // --- CARICAMENTO STORICO E GRAFICI (Definite qui per lo scope) ---
-  const loadHistory = async (isInitial = false) => {
-      if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
-      
-      setLoadingHistory(true);
-      try {
-          // Query SEMPLIFICATA
-          let q = query(
-              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
-              orderBy("date", "desc"),
-              limit(10)
-          );
-
-          if (!isInitial && lastVisibleLog) {
-              q = query(q, startAfter(lastVisibleLog));
-          }
-
-          const querySnapshot = await getDocs(q);
-          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-          // Ordinamento secondario client-side
-          logs.sort((a, b) => b.startTime.localeCompare(a.startTime));
-
-          if (querySnapshot.docs.length > 0) {
-            setLastVisibleLog(querySnapshot.docs[querySnapshot.docs.length - 1]);
-            setHistoryLogs(prev => isInitial ? logs : [...prev, ...logs]);
-          } else {
-            setAllHistoryLoaded(true);
-          }
-
-      } catch (e) { console.error(e); showToast("Errore caricamento storico", 'error'); }
-      setLoadingHistory(false);
-  };
-
-  const loadChartData = async () => {
-       if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
-       try {
-           const q = query(
-              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
-              orderBy("date", "desc"),
-              limit(50)
-          );
-          const querySnapshot = await getDocs(q);
-          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          
-          // Chart Settimanale
-          const weeklyLogs = logs.slice(0, 7).reverse();
-          setWeeklyVolumeData({
-              labels: weeklyLogs.map(l => l.date.slice(5)), // MM-DD
-              datasets: [{
-                  label: 'Volume (Kg)',
-                  data: weeklyLogs.map(l => l.totalTonnage),
-                  backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                  borderColor: 'rgba(59, 130, 246, 1)',
-                  borderWidth: 1,
-              }]
-          });
-          
-          // Chart Mensile
-          const last30DaysLogs = logs.filter(l => (new Date() - new Date(l.date)) / (1000 * 60 * 60 * 24) <= 30);
-          const monthlyLogs = last30DaysLogs.reverse();
-          setMonthlyVolumeData({
-               labels: monthlyLogs.map(l => l.date.slice(5)),
-               datasets: [{
-                   label: 'Volume (Kg)',
-                   data: monthlyLogs.map(l => l.totalTonnage),
-                   backgroundColor: 'rgba(16, 185, 129, 0.5)',
-                   borderColor: 'rgba(16, 185, 129, 1)',
-                   borderWidth: 1,
-               }]
-          });
-
-          // Chart Progressione
-          const progressionLogs = logs.filter(l => l.dayName && l.dayName.includes(selectedProgressionDay)).reverse();
-          setProgressionData({
-               labels: progressionLogs.map(l => l.date.slice(5)),
-               datasets: [{
-                   label: 'Progressione Volume',
-                   data: progressionLogs.map(l => l.totalTonnage),
-                   borderColor: '#10b981',
-                   backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                   tension: 0.3,
-                   fill: true
-               }]
-          });
-
-       } catch(e) { console.error(e); }
-  };
+  // --- RESET SCROLL EFFETTO ---
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTo({ left: 0, behavior: 'instant' });
+    }
+  }, [activeDayId]);
 
   // --- LOGICA ALLENAMENTO ---
   const handleSetCompletion = (exerciseIndex, setIndex) => {
@@ -582,7 +537,8 @@ export default function App() {
 
       if (user.uid !== 'mock-user' && user.uid !== 'test-user') {
           try {
-              await addDoc(collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`), workoutLog);
+              // Usa sanitizeData qui per sicurezza
+              await addDoc(collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`), sanitizeData(workoutLog));
               showToast("Salvato con successo!", 'success');
           } catch (e) { console.error("Save error:", e); showToast("Errore salvataggio!", 'error'); return; }
       } else { showToast("Salvato (Mock)", 'success'); }
@@ -632,12 +588,6 @@ export default function App() {
           }
       }
   }, [user]);
-
-  useEffect(() => {
-      if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollTo({ left: 0, behavior: 'instant' });
-      }
-  }, [activeDayId]);
 
   useEffect(() => {
       let interval;
@@ -755,6 +705,8 @@ export default function App() {
                 </div>
                 <div className="mt-auto pt-4 border-t border-gray-800">
                     <button onClick={handleLogout} className="w-full flex items-center p-3 rounded-xl text-red-400 hover:bg-red-500/10"><LogOut className="w-5 h-5 mr-3" />Esci</button>
+                    {/* Bottone Migrazione (per debug/recupero) */}
+                    <button onClick={migrateLocalData} className="w-full flex items-center p-3 rounded-xl text-gray-500 hover:bg-gray-800 transition-colors mt-2 text-sm"><Database className="w-4 h-4 mr-3" /> Recupera Dati</button>
                 </div>
               </div>
           </div>
@@ -795,7 +747,7 @@ export default function App() {
              </div>
              <div className="bg-gray-900 w-full max-w-xs p-6 rounded-2xl border border-gray-800 mb-8">
                  <div className="flex justify-between items-center mb-2"><span className="text-gray-400">Tempo</span><span className="text-white font-mono font-bold">{formatDuration(sessionTimer)}</span></div>
-                 <div className="flex justify-between items-center"><span className="text-gray-400">Volume</span><span className="text-green-400 font-mono font-bold">{calculateTotalVolume(activeSession)} Kg</span></div>
+                 <div className="flex justify-between items-center"><span className="text-gray-400">Volume</span><span className="text-green-400 font-mono font-bold">{calculateCompletedVolume(activeSession)} Kg</span></div>
              </div>
              <div className="mb-10 text-center">
                  <p className="text-sm text-gray-500 mb-4 uppercase tracking-widest">Valuta la sessione</p>
