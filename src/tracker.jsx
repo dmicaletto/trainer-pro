@@ -20,7 +20,8 @@ import {
   doc,
   getDoc,
   startAfter,
-  serverTimestamp
+  serverTimestamp,
+  deleteDoc // Aggiunto import per eliminazione
 } from "firebase/firestore";
 import { 
   Menu, 
@@ -52,7 +53,8 @@ import {
   Edit2,
   Maximize2,
   Database,
-  RefreshCw 
+  RefreshCw,
+  Trash2 // Aggiunta icona Cestino
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -186,6 +188,7 @@ const INITIAL_WORKOUT_DAYS = {
 		]
 	}
 };
+
 const getImageUrl = (url, name) => {
     if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
@@ -274,7 +277,7 @@ export default function App() {
   const scrollContainerRef = useRef(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  // Storico & Analisi (STATI DEFINITI QUI PRIMA DELL'USO)
+  // Storico & Analisi
   const [historyLogs, setHistoryLogs] = useState([]);
   const [lastVisibleLog, setLastVisibleLog] = useState(null); 
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -290,7 +293,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // --- FUNZIONI DI SUPPORTO E LOGICA (Definite prima dell'uso) ---
+  // --- FUNZIONI DI SUPPORTO E LOGICA ---
 
   const showToast = (message, type = 'success') => {
       setToast({ show: true, message, type });
@@ -345,9 +348,7 @@ export default function App() {
   const saveDefaultToFirestore = async (userId, exerciseId, setIndex, field, value) => {
       if (!userId || userId === 'mock-user') return;
       try {
-          // Sanitizzazione fondamentale
           if (value === undefined) value = null;
-
           const docRef = doc(db, `artifacts/${APP_ID}/users/${userId}/data`, 'workout_defaults');
           const currentDefaults = await fetchUserDefaults(userId);
           
@@ -355,8 +356,6 @@ export default function App() {
           if (!currentDefaults[exerciseId][setIndex]) currentDefaults[exerciseId][setIndex] = {};
           
           currentDefaults[exerciseId][setIndex][field] = value;
-          
-          // Sanitizza tutto l'oggetto prima di salvare
           await setDoc(docRef, sanitizeData(currentDefaults), { merge: true });
       } catch (e) { console.error("Defaults Save Error:", e); }
   };
@@ -414,13 +413,12 @@ export default function App() {
   };
   const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
 
-  // --- CARICAMENTO STORICO E GRAFICI (Definite qui per lo scope) ---
+  // --- CARICAMENTO STORICO E GRAFICI ---
   const loadHistory = async (isInitial = false) => {
       if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
       
       setLoadingHistory(true);
       try {
-          // Query SEMPLIFICATA
           let q = query(
               collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
               orderBy("date", "desc"),
@@ -434,7 +432,6 @@ export default function App() {
           const querySnapshot = await getDocs(q);
           const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-          // Ordinamento secondario client-side
           logs.sort((a, b) => b.startTime.localeCompare(a.startTime));
 
           if (querySnapshot.docs.length > 0) {
@@ -459,10 +456,9 @@ export default function App() {
           const querySnapshot = await getDocs(q);
           const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           
-          // Chart Settimanale
           const weeklyLogs = logs.slice(0, 7).reverse();
           setWeeklyVolumeData({
-              labels: weeklyLogs.map(l => l.date.slice(5)), // MM-DD
+              labels: weeklyLogs.map(l => l.date.slice(5)), 
               datasets: [{
                   label: 'Volume (Kg)',
                   data: weeklyLogs.map(l => l.totalTonnage),
@@ -472,7 +468,6 @@ export default function App() {
               }]
           });
           
-          // Chart Mensile
           const last30DaysLogs = logs.filter(l => (new Date() - new Date(l.date)) / (1000 * 60 * 60 * 24) <= 30);
           const monthlyLogs = last30DaysLogs.reverse();
           setMonthlyVolumeData({
@@ -486,7 +481,6 @@ export default function App() {
                }]
           });
 
-          // Chart Progressione
           const progressionLogs = logs.filter(l => l.dayName && l.dayName.includes(selectedProgressionDay)).reverse();
           setProgressionData({
                labels: progressionLogs.map(l => l.date.slice(5)),
@@ -503,12 +497,25 @@ export default function App() {
        } catch(e) { console.error(e); }
   };
   
+  // Funzione per eliminare una sessione
+  const handleDeleteLog = async (logId) => {
+      if(!confirm("Eliminare definitivamente questa sessione?")) return;
+      
+      try {
+          await deleteDoc(doc(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`, logId));
+          setHistoryLogs(prev => prev.filter(l => l.id !== logId));
+          loadChartData(); // Refresh grafici
+          showToast("Sessione eliminata.", "success");
+      } catch (e) {
+          console.error("Delete error:", e);
+          showToast("Errore eliminazione.", "error");
+      }
+  };
+
   // Funzione per recuperare i dati dalla vecchia app (Legacy)
   const recoverLegacyData = async () => {
     if (!user || user.uid === 'mock-user') return;
     
-    // Controlla se siamo già loggati con l'ID legacy o se dobbiamo copiare da un altro ID
-    // In questo scenario, proviamo a copiare dalla collezione legacy specifica se l'utente corrente è diverso
     if (user.uid === LEGACY_USER_ID) {
         showToast("Sei già loggato con l'utente storico.", 'info');
         loadHistory(true);
@@ -519,7 +526,6 @@ export default function App() {
     
     setLoading(true);
     try {
-        // Leggi dalla collezione legacy
         const legacyRef = collection(db, `artifacts/${APP_ID}/users/${LEGACY_USER_ID}/workout_history`);
         const snapshot = await getDocs(legacyRef);
         
@@ -530,10 +536,8 @@ export default function App() {
         }
         
         let count = 0;
-        // Copia nel nuovo utente
         for (const docSnap of snapshot.docs) {
             const data = docSnap.data();
-            // Aggiungi solo se non esiste (logica base, qui aggiungiamo sempre per semplicità, ma in prod andrebbe controllato)
             await addDoc(collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`), data);
             count++;
         }
@@ -652,7 +656,6 @@ export default function App() {
 
       if (user.uid !== 'mock-user' && user.uid !== 'test-user') {
           try {
-              // Usa sanitizeData qui per sicurezza
               await addDoc(collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`), sanitizeData(workoutLog));
               showToast("Salvato con successo!", 'success');
           } catch (e) { console.error("Save error:", e); showToast("Errore salvataggio!", 'error'); return; }
@@ -992,7 +995,11 @@ export default function App() {
                                     </div>
                                     <div className="text-right">
                                         <div className="text-green-400 font-mono font-bold text-lg">{log.totalTonnage} <span className="text-xs text-gray-500">Kg</span></div>
-                                        <div className="flex justify-end mt-1">{[...Array(5)].map((_, i) => (<Star key={i} className={`w-3 h-3 ${i < log.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-800'}`} />))}</div>
+                                        <div className="flex justify-end mt-1">
+                                             <div className="flex mr-2">{[...Array(5)].map((_, i) => (<Star key={i} className={`w-3 h-3 ${i < log.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-800'}`} />))}</div>
+                                             {/* Tasto Cancella */}
+                                             <button onClick={() => handleDeleteLog(log.id)} className="p-1 text-red-500 hover:bg-red-500/10 rounded"><Trash2 className="w-4 h-4" /></button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
