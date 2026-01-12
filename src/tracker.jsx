@@ -169,7 +169,7 @@ const INITIAL_WORKOUT_DAYS = {
     'day_4': {
 		name: "Giorno 4: Petto e Spalle (Richiamo)",
 		exercises: [
-			{ id: 'd4_e1', name: "Panca Piana Manubri", sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: '', notes: "" },
+			{ id: 'd4_e1', name: "Panca Piana Manubri", sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: './images/Chest-Press-con-Manubri-gif.gif', notes: "" },
 			{ id: 'd4_e2', name: "Chest Press distensioni delle braccia", sets: Array(3).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: './images/chestpress.png', notes: "" },
 			{ id: 'd4_e3', name: "Panca Inclinata Manubri", sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: './images/spinte-panca-alta-manubri.png', notes: "inclinata 30 gradi" },
 			{ id: 'd4_e4', name: "Alzate Laterali", sets: Array(3).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/alzate-laterali.png', notes: "" },
