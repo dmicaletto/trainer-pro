@@ -48,7 +48,8 @@ import {
   History,
   Filter,
   ChevronDown,
-  Edit2
+  Edit2,
+  Maximize2
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -180,6 +181,7 @@ const INITIAL_WORKOUT_DAYS = {
 		]
 	}
 };
+
 const getImageUrl = (url, name) => {
     if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
@@ -247,6 +249,7 @@ export default function App() {
   // UI States
   const [restTimer, setRestTimer] = useState({ isOpen: false, timeLeft: 0, totalTime: 0 });
   const [finishModalOpen, setFinishModalOpen] = useState(false);
+  const [fullScreenImage, setFullScreenImage] = useState(null); 
   const [rating, setRating] = useState(0);
   const scrollContainerRef = useRef(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -267,7 +270,8 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // --- PERSISTENZA UTENTE ---
+  // --- FUNZIONI DI SUPPORTO E LOGICA (Definite prima dell'uso) ---
+
   const fetchUserProfile = async (userId) => {
     if (!userId || userId === 'mock-user') {
         setUserProfile({ name: "Davide", surname: "Micaletto", weight: 68, age: 52, sex: 'M' });
@@ -328,7 +332,6 @@ export default function App() {
       } catch (e) { console.error(e); }
   };
 
-  // --- HELPER FUNCTIONS ---
   const showToast = (message, type = 'success') => {
       setToast({ show: true, message, type });
       setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
@@ -363,9 +366,11 @@ export default function App() {
   const openRestTimer = (seconds) => {
       setRestTimer({ isOpen: true, timeLeft: seconds, totalTime: seconds });
   };
+  
   const closeRestTimer = () => {
       setRestTimer({ isOpen: false, timeLeft: 0, totalTime: 0 });
   };
+  
   const scrollToExercise = (index) => {
       if (scrollContainerRef.current) {
           const container = scrollContainerRef.current;
@@ -385,13 +390,94 @@ export default function App() {
   };
   const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
 
-  // --- RESET SCROLL EFFETTO ---
-  // Questo useEffect resetta lo scroll quando cambia il giorno selezionato
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTo({ left: 0, behavior: 'instant' });
-    }
-  }, [activeDayId]);
+  // --- CARICAMENTO STORICO E GRAFICI (Definite qui per lo scope) ---
+  const loadHistory = async (isInitial = false) => {
+      if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
+      
+      setLoadingHistory(true);
+      try {
+          // Query SEMPLIFICATA
+          let q = query(
+              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
+              orderBy("date", "desc"),
+              limit(10)
+          );
+
+          if (!isInitial && lastVisibleLog) {
+              q = query(q, startAfter(lastVisibleLog));
+          }
+
+          const querySnapshot = await getDocs(q);
+          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          // Ordinamento secondario client-side
+          logs.sort((a, b) => b.startTime.localeCompare(a.startTime));
+
+          if (querySnapshot.docs.length > 0) {
+            setLastVisibleLog(querySnapshot.docs[querySnapshot.docs.length - 1]);
+            setHistoryLogs(prev => isInitial ? logs : [...prev, ...logs]);
+          } else {
+            setAllHistoryLoaded(true);
+          }
+
+      } catch (e) { console.error(e); showToast("Errore caricamento storico", 'error'); }
+      setLoadingHistory(false);
+  };
+
+  const loadChartData = async () => {
+       if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
+       try {
+           const q = query(
+              collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
+              orderBy("date", "desc"),
+              limit(50)
+          );
+          const querySnapshot = await getDocs(q);
+          const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
+          // Chart Settimanale
+          const weeklyLogs = logs.slice(0, 7).reverse();
+          setWeeklyVolumeData({
+              labels: weeklyLogs.map(l => l.date.slice(5)), // MM-DD
+              datasets: [{
+                  label: 'Volume (Kg)',
+                  data: weeklyLogs.map(l => l.totalTonnage),
+                  backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                  borderColor: 'rgba(59, 130, 246, 1)',
+                  borderWidth: 1,
+              }]
+          });
+          
+          // Chart Mensile
+          const last30DaysLogs = logs.filter(l => (new Date() - new Date(l.date)) / (1000 * 60 * 60 * 24) <= 30);
+          const monthlyLogs = last30DaysLogs.reverse();
+          setMonthlyVolumeData({
+               labels: monthlyLogs.map(l => l.date.slice(5)),
+               datasets: [{
+                   label: 'Volume (Kg)',
+                   data: monthlyLogs.map(l => l.totalTonnage),
+                   backgroundColor: 'rgba(16, 185, 129, 0.5)',
+                   borderColor: 'rgba(16, 185, 129, 1)',
+                   borderWidth: 1,
+               }]
+          });
+
+          // Chart Progressione
+          const progressionLogs = logs.filter(l => l.dayName && l.dayName.includes(selectedProgressionDay)).reverse();
+          setProgressionData({
+               labels: progressionLogs.map(l => l.date.slice(5)),
+               datasets: [{
+                   label: 'Progressione Volume',
+                   data: progressionLogs.map(l => l.totalTonnage),
+                   borderColor: '#10b981',
+                   backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                   tension: 0.3,
+                   fill: true
+               }]
+          });
+
+       } catch(e) { console.error(e); }
+  };
 
   // --- LOGICA ALLENAMENTO ---
   const handleSetCompletion = (exerciseIndex, setIndex) => {
@@ -436,7 +522,7 @@ export default function App() {
       }
   };
 
-  // --- HANDLERS ---
+  // --- HANDLERS UI ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setAuthError('');
@@ -479,7 +565,7 @@ export default function App() {
   };
 
   const handleSaveAndExit = async () => {
-      const totalTonnage = calculateTotalVolume(activeSession);
+      const totalTonnage = calculateCompletedVolume(activeSession);
       const endTime = new Date();
       const durationSeconds = sessionTimer;
       const workoutLog = {
@@ -510,7 +596,7 @@ export default function App() {
 
   const handleCancelWorkout = () => { if(!confirm("Annullare?")) return; setActiveSession(null); clearLocalSession(); setView('dashboard'); };
 
-  // --- EFFETTI ---
+  // --- EFFETTI DI INIZIALIZZAZIONE ---
   useEffect(() => {
     let unsubscribe = () => {};
     const activateMockMode = () => { setUser({ uid: "mock-user", email: "preview@gym.app", displayName: "Preview User" }); setLoading(false); };
@@ -548,6 +634,12 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+      if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({ left: 0, behavior: 'instant' });
+      }
+  }, [activeDayId]);
+
+  useEffect(() => {
       let interval;
       if (view === 'active-workout' && !finishModalOpen) {
           interval = setInterval(() => { setSessionTimer(t => { const newVal = t + 1; if (newVal % 5 === 0 && activeSession) saveSessionLocally(activeSession); return newVal; }); }, 1000);
@@ -562,24 +654,26 @@ export default function App() {
       return () => clearInterval(interval);
   }, [restTimer.isOpen, restTimer.timeLeft]);
 
-  // Caricamento Storico & Analisi
+  // Gestione caricamento dati Storico/Grafici al cambio view
   useEffect(() => {
-      if (view === 'history' && user && !['mock-user', 'test-user'].includes(user.uid)) {
-          if(historyLogs.length === 0) loadHistory(true);
-          loadChartData();
-      } else if (view === 'history' && ['mock-user', 'test-user'].includes(user?.uid)) {
-           // Mock
-           const mData = {
+      if (view === 'history') {
+          if(!['mock-user', 'test-user'].includes(user?.uid)) {
+              if(historyLogs.length === 0) loadHistory(true);
+              loadChartData();
+          } else {
+              // Mock
+              const mData = {
                   labels: ['01-01', '01-04', '01-06', '01-08'],
                   datasets: [{ label: 'Volume (Kg)', data: [4200, 5100, 6200, 4500], backgroundColor: 'rgba(59, 130, 246, 0.5)' }]
               };
-           setWeeklyVolumeData(mData);
-           setMonthlyVolumeData(mData);
-           setProgressionData(mData);
-           setHistoryLogs([
-               { id: '1', dayName: 'Petto', date: '2025-01-08', durationDisplay: '00:45', totalTonnage: 4500, rating: 4 },
-               { id: '2', dayName: 'Gambe', date: '2025-01-06', durationDisplay: '00:55', totalTonnage: 6200, rating: 3 }
-           ]);
+              setWeeklyVolumeData(mData);
+              setMonthlyVolumeData(mData);
+              setProgressionData(mData);
+              setHistoryLogs([
+                  { id: '1', dayName: 'Petto', date: '2025-01-08', durationDisplay: '00:45', totalTonnage: 4500, rating: 4 },
+                  { id: '2', dayName: 'Gambe', date: '2025-01-06', durationDisplay: '00:55', totalTonnage: 6200, rating: 3 }
+              ]);
+          }
       }
   }, [view, user, selectedProgressionDay]);
 
@@ -617,9 +711,12 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-4 h-16 flex justify-between items-center">
             {view === 'active-workout' ? (
                 <div className="flex items-center justify-between w-full">
+                    {/* Pulsante Annulla (Sinistra) */}
                     <button onClick={handleCancelWorkout} className="text-xs text-red-400 font-semibold border border-red-900/50 px-3 py-1 rounded-full hover:bg-red-900/10 flex items-center gap-1">
                         <X className="w-3 h-3" /> ESCI
                     </button>
+                    
+                    {/* Timer e Volume PARZIALE (Centro/Destra) */}
                     <div className="flex flex-col items-end">
                          <div className="flex items-center text-blue-400 font-mono text-lg font-bold animate-pulse">
                             <Timer className="w-4 h-4 mr-1" />
@@ -678,6 +775,17 @@ export default function App() {
           </div>
       )}
 
+      {/* FULL SCREEN IMAGE MODAL */}
+      {fullScreenImage && (
+          <div className="fixed inset-0 z-[80] bg-black/95 flex flex-col items-center justify-center p-2 animate-in fade-in duration-200" onClick={() => setFullScreenImage(null)}>
+              <button className="absolute top-6 right-6 p-2 bg-gray-800 rounded-full text-white z-50">
+                  <X className="w-6 h-6" />
+              </button>
+              <img src={fullScreenImage} alt="Esercizio Full Screen" className="w-full h-auto max-h-[85vh] object-contain rounded-lg" />
+              <p className="text-gray-400 mt-4 text-sm">Tocca ovunque per chiudere</p>
+          </div>
+      )}
+
       {/* FINISH MODAL */}
       {finishModalOpen && (
           <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-6 animate-in zoom-in">
@@ -720,9 +828,14 @@ export default function App() {
                 <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 no-scrollbar -mx-4 px-4" ref={scrollContainerRef}>
                     {(view === 'active-workout' ? activeSession.exercises : workoutData[activeDayId].exercises).map((exercise, exIndex) => (
                         <div key={exercise.id} className="snap-center shrink-0 w-[95vw] sm:w-[400px] bg-gray-900 rounded-3xl overflow-hidden border border-gray-800 shadow-xl flex flex-col relative">
-                            <div className="relative h-48 w-full bg-gray-800">
+                            {/* Immagine con Click Handler */}
+                            <div className="relative h-48 w-full bg-gray-800 cursor-pointer" onClick={() => setFullScreenImage(getImageUrl(exercise.imageUrl, exercise.name))}>
                                 <img src={getImageUrl(exercise.imageUrl, exercise.name)} alt={exercise.name} className="w-full h-full object-cover opacity-70" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-blue-950/60 to-transparent"></div>
+                                {/* Icona Zoom */}
+                                <div className="absolute top-3 left-3 bg-black/40 backdrop-blur-sm p-2 rounded-full border border-white/10 z-20">
+                                    <Maximize2 className="w-4 h-4 text-white/80" />
+                                </div>
                                 <div className="absolute bottom-4 left-5 right-5 z-10 flex justify-between items-end">
                                     <h3 className="text-xl font-bold text-white leading-tight shadow-black drop-shadow-md max-w-[80%]">{exercise.name}</h3>
                                     <div className="bg-gray-900/60 backdrop-blur-md px-3 py-1 rounded-lg text-xs font-mono text-blue-300 border border-white/10">{exIndex + 1}/{(view === 'active-workout' ? activeSession.exercises : workoutData[activeDayId].exercises).length}</div>
@@ -826,6 +939,7 @@ export default function App() {
                 <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6 border-4 border-gray-800 shadow-xl relative group">
                     <User className="w-10 h-10 text-gray-500" />
                     <div className="absolute bottom-0 right-0 bg-blue-600 px-2 py-1 rounded-full text-xs font-bold border-2 border-gray-900">{userProfile.age}</div>
+                    {/* Tasto Modifica Overlay */}
                     <button 
                         onClick={() => setIsEditingProfile(true)}
                         className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
