@@ -20,9 +20,11 @@ jobs:
         with:
           node-version: '18'
 
+      # Installazione pulita delle dipendenze npm
       - name: Install Dependencies
         run: npm install --no-package-lock
 
+      # Installazione capacitor core se manca
       - name: Install Capacitor (Fallback)
         run: |
           npm install @capacitor/core
@@ -53,12 +55,13 @@ jobs:
           java-version: '17'
 
       - name: Build APK with Gradle
-        # Aggiunto --no-daemon e --stacktrace per stabilità e debug
-        # Aggiunto 'clean' per evitare cache corrotte
+        # FIX: Aumento memoria e disabilito demone per evitare crash su CI
+        env:
+          GRADLE_OPTS: "-Xmx4g -Dorg.gradle.daemon=false"
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          ./gradlew clean assembleDebug --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
