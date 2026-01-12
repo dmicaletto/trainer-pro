@@ -21,7 +21,7 @@ import {
   getDoc,
   startAfter,
   serverTimestamp,
-  deleteDoc // Aggiunto import per eliminazione
+  deleteDoc
 } from "firebase/firestore";
 import { 
   Menu, 
@@ -54,7 +54,7 @@ import {
   Maximize2,
   Database,
   RefreshCw,
-  Trash2 // Aggiunta icona Cestino
+  Trash2 // Corretto: Aggiunto Trash2 agli import
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -100,10 +100,8 @@ const app = initializeApp(safeConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ID App (Fondamentale per trovare i vecchi dati)
+// ID App per la struttura del DB
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
-// Vecchio User ID noto (da cui recuperare i dati se necessario)
-const LEGACY_USER_ID = "wtdiFBHzWQblPjhPxgk0OVSbI4o2";
 
 // --- DATI INIZIALI (Template) ---
 const INITIAL_WORKOUT_DAYS = {
@@ -268,6 +266,7 @@ export default function App() {
   const [activeSession, setActiveSession] = useState(null);
   const [sessionTimer, setSessionTimer] = useState(0);
   const [startTime, setStartTime] = useState(null);
+  const [lastSessionTonnage, setLastSessionTonnage] = useState(null); 
   
   // UI States
   const [restTimer, setRestTimer] = useState({ isOpen: false, timeLeft: 0, totalTime: 0 });
@@ -422,7 +421,7 @@ export default function App() {
           let q = query(
               collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
               orderBy("date", "desc"),
-              limit(10)
+              limit(20)
           );
 
           if (!isInitial && lastVisibleLog) {
@@ -432,7 +431,12 @@ export default function App() {
           const querySnapshot = await getDocs(q);
           const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-          logs.sort((a, b) => b.startTime.localeCompare(a.startTime));
+          // FIX ORDINAMENTO: Combina data e ora per ordinamento assoluto corretto
+          logs.sort((a, b) => {
+              const dateA = new Date(`${a.date}T${a.startTime}`);
+              const dateB = new Date(`${b.date}T${b.startTime}`);
+              return dateB - dateA;
+          });
 
           if (querySnapshot.docs.length > 0) {
             setLastVisibleLog(querySnapshot.docs[querySnapshot.docs.length - 1]);
@@ -497,60 +501,17 @@ export default function App() {
        } catch(e) { console.error(e); }
   };
   
-  // Funzione per eliminare una sessione
   const handleDeleteLog = async (logId) => {
       if(!confirm("Eliminare definitivamente questa sessione?")) return;
-      
       try {
           await deleteDoc(doc(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`, logId));
           setHistoryLogs(prev => prev.filter(l => l.id !== logId));
-          loadChartData(); // Refresh grafici
+          loadChartData(); 
           showToast("Sessione eliminata.", "success");
       } catch (e) {
           console.error("Delete error:", e);
           showToast("Errore eliminazione.", "error");
       }
-  };
-
-  // Funzione per recuperare i dati dalla vecchia app (Legacy)
-  const recoverLegacyData = async () => {
-    if (!user || user.uid === 'mock-user') return;
-    
-    if (user.uid === LEGACY_USER_ID) {
-        showToast("Sei già loggato con l'utente storico.", 'info');
-        loadHistory(true);
-        return;
-    }
-    
-    if(!confirm("Vuoi tentare di recuperare i dati dalla vecchia app?")) return;
-    
-    setLoading(true);
-    try {
-        const legacyRef = collection(db, `artifacts/${APP_ID}/users/${LEGACY_USER_ID}/workout_history`);
-        const snapshot = await getDocs(legacyRef);
-        
-        if (snapshot.empty) {
-            showToast("Nessun dato trovato da recuperare.", 'error');
-            setLoading(false);
-            return;
-        }
-        
-        let count = 0;
-        for (const docSnap of snapshot.docs) {
-            const data = docSnap.data();
-            await addDoc(collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`), data);
-            count++;
-        }
-        
-        showToast(`Recuperati ${count} allenamenti!`, 'success');
-        loadHistory(true);
-        loadChartData();
-        
-    } catch (e) {
-        console.error("Recovery error:", e);
-        showToast("Errore durante il recupero.", 'error');
-    }
-    setLoading(false);
   };
 
   // --- LOGICA ALLENAMENTO ---
@@ -614,7 +575,27 @@ export default function App() {
       const dayTemplate = workoutData[activeDayId];
       let sessionData = JSON.parse(JSON.stringify(dayTemplate));
       setLoading(true);
+      
+      // Recupera ultimo tonnellaggio
+      setLastSessionTonnage(null);
       if (user && user.uid !== 'mock-user') {
+          try {
+              const q = query(
+                  collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
+                  orderBy("date", "desc"),
+                  limit(50) 
+              );
+              const snapshot = await getDocs(q);
+              const lastWorkout = snapshot.docs
+                  .map(d => d.data())
+                  .find(w => w.dayName === dayTemplate.name);
+                  
+              if (lastWorkout) {
+                  setLastSessionTonnage(lastWorkout.totalTonnage);
+              }
+          } catch(e) { console.error("Error fetching last session:", e); }
+      
+          // Carica Defaults
           const userDefaults = await fetchUserDefaults(user.uid);
           sessionData.exercises = sessionData.exercises.map(ex => {
               if (userDefaults[ex.id]) {
@@ -642,13 +623,24 @@ export default function App() {
       const totalTonnage = calculateCompletedVolume(activeSession);
       const endTime = new Date();
       const durationSeconds = sessionTimer;
+      
+      // FIX ORARIO: Usa sempre formato 2 cifre
+      const formatTime = (date) => {
+        return date.toLocaleTimeString('it-IT', { 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit', 
+            hour12: false 
+        });
+      };
+
       const workoutLog = {
           date: startTime ? new Date(startTime).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           dayName: activeSession.name,
           durationDisplay: formatDuration(durationSeconds),
           durationSeconds: durationSeconds,
-          startTime: startTime ? new Date(startTime).toLocaleTimeString('it-IT') : "00:00:00",
-          endTime: endTime.toLocaleTimeString('it-IT'),
+          startTime: startTime ? formatTime(new Date(startTime)) : "00:00:00",
+          endTime: formatTime(endTime),
           estimatedCalories: Math.round(totalTonnage * 0.05 + durationSeconds / 60 * 4),
           rating: rating,
           totalTonnage: totalTonnage
@@ -796,8 +788,9 @@ export default function App() {
                             <Timer className="w-4 h-4 mr-1" />
                             {formatDuration(sessionTimer)}
                         </div>
-                        <div className="text-xs font-mono text-green-400">
-                             Vol: {calculateCompletedVolume(activeSession)} kg
+                        <div className="flex gap-2 text-xs font-mono">
+                             <span className="text-green-400">Vol: {calculateCompletedVolume(activeSession)} kg</span>
+                             {lastSessionTonnage > 0 && <span className="text-gray-500">| Last: {lastSessionTonnage} kg</span>}
                         </div>
                     </div>
                 </div>
@@ -829,8 +822,6 @@ export default function App() {
                 </div>
                 <div className="mt-auto pt-4 border-t border-gray-800">
                     <button onClick={handleLogout} className="w-full flex items-center p-3 rounded-xl text-red-400 hover:bg-red-500/10"><LogOut className="w-5 h-5 mr-3" />Esci</button>
-                    {/* Bottone Migrazione (per recupero dati vecchi) */}
-                    <button onClick={recoverLegacyData} className="w-full flex items-center p-3 rounded-xl text-yellow-500 hover:bg-gray-800 transition-colors mt-2 text-sm"><RefreshCw className="w-4 h-4 mr-3" /> Recupera Dati Vecchi</button>
                 </div>
               </div>
           </div>
