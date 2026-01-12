@@ -19,12 +19,12 @@ jobs:
         with:
           node-version: 20
 
-      # Usa Temurin invece di Zulu per migliore compatibilità Android
+      # FIX CRITICO: Aggiornato a Java 21 per risolvere "invalid source release: 21"
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Install Dependencies
         run: npm install
@@ -37,7 +37,6 @@ jobs:
         run: npm run build
 
       # Inizializza Capacitor solo se non è già stato fatto
-      # FIX: Aggiornato ID pacchetto per corrispondere a quello dell'utente
       - name: Init Capacitor (if needed)
         run: |
           if [ ! -f "capacitor.config.json" ] && [ ! -f "capacitor.config.ts" ]; then
@@ -54,7 +53,6 @@ jobs:
           fi
 
       # Gestione google-services.json (Reale o Dummy per evitare crash build)
-      # FIX: Aggiornato dummy file con il package name corretto 'com.dmicaletto.trainerpro'
       - name: Create google-services.json
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
