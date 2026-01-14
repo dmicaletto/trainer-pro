@@ -1,0 +1,111 @@
+name: Semantic Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Importante per analizzare la storia dei commit
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # Analisi dei commit per determinare il bump
+      - name: Determine Version Bump
+        id: bump
+        run: |
+          # Recupera l'ultimo tag, default a v0.0.0 se non esiste
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Last tag: $LAST_TAG"
+          
+          # Analizza i commit dall'ultimo tag
+          COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"%s")
+          
+          # Default: nessun bump
+          BUMP="none"
+          
+          # Logica Semantic Release semplificata
+          if echo "$COMMITS" | grep -q "BREAKING CHANGE"; then
+            BUMP="major"
+          elif echo "$COMMITS" | grep -q "^feat"; then
+            BUMP="minor"
+          elif echo "$COMMITS" | grep -q "^fix"; then
+            BUMP="patch"
+          fi
+          
+          echo "Detected bump type: $BUMP"
+          echo "bump=$BUMP" >> $GITHUB_OUTPUT
+          echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
+
+      # Calcolo della nuova versione (solo se necessario)
+      - name: Calculate New Version
+        if: steps.bump.outputs.bump != 'none'
+        id: version
+        run: |
+          LAST_TAG=${{ steps.bump.outputs.last_tag }}
+          # Rimuove la 'v' iniziale se presente
+          VERSION=${LAST_TAG#v}
+          
+          # Divide in array [major, minor, patch]
+          IFS='.' read -r -a parts <<< "$VERSION"
+          MAJOR=${parts[0]}
+          MINOR=${parts[1]}
+          PATCH=${parts[2]}
+          
+          BUMP_TYPE=${{ steps.bump.outputs.bump }}
+          
+          if [ "$BUMP_TYPE" == "major" ]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [ "$BUMP_TYPE" == "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          elif [ "$BUMP_TYPE" == "patch" ]; then
+            PATCH=$((PATCH + 1))
+          fi
+          
+          NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+          echo "New version: $NEW_TAG"
+          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+
+      # Aggiorna package.json (Opzionale ma consigliato per app JS)
+      - name: Update package.json version
+        if: steps.bump.outputs.bump != 'none'
+        run: |
+          NEW_VERSION=${{ steps.version.outputs.tag }}
+          # Rimuovi la 'v' per il package.json
+          CLEAN_VERSION=${NEW_VERSION#v}
+          
+          npm version $CLEAN_VERSION --no-git-tag-version
+          
+          # Configura git per il commit
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          
+          git add package.json package-lock.json
+          git commit -m "chore(release): bump version to $CLEAN_VERSION [skip ci]"
+          git push
+
+      # Crea la Release su GitHub
+      - name: Create Release
+        if: steps.bump.outputs.bump != 'none'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
