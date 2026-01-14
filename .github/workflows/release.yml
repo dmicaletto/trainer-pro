@@ -26,12 +26,21 @@ jobs:
       - name: Determine Version Bump
         id: bump
         run: |
-          # Recupera l'ultimo tag, default a v0.0.0 se non esiste
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "Last tag: $LAST_TAG"
+          # Recupera l'ultimo tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "Last tag found: '$LAST_TAG'"
           
-          # Analizza i commit dall'ultimo tag
-          COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"%s")
+          if [ -z "$LAST_TAG" ]; then
+            # Se non ci sono tag, analizza tutti i commit dall'inizio
+            echo "No previous tags found. Analyzing all commits."
+            COMMITS=$(git log --pretty=format:"%s")
+            # Se è il primo rilascio, impostiamo un default di partenza o usiamo la versione del package.json
+            LAST_TAG="v0.0.0" 
+          else
+            # Analizza i commit dall'ultimo tag
+            echo "Analyzing commits since $LAST_TAG"
+            COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"%s")
+          fi
           
           # Default: nessun bump
           BUMP="none"
@@ -58,6 +67,14 @@ jobs:
           # Rimuove la 'v' iniziale se presente
           VERSION=${LAST_TAG#v}
           
+          # Se la versione è vuota o 0.0.0, proviamo a leggere dal package.json corrente come fallback
+          if [ "$VERSION" == "0.0.0" ]; then
+             CURRENT_PKG_VERSION=$(node -p "require('./package.json').version")
+             if [ "$CURRENT_PKG_VERSION" != "0.0.0" ]; then
+                VERSION=$CURRENT_PKG_VERSION
+             fi
+          fi
+
           # Divide in array [major, minor, patch]
           IFS='.' read -r -a parts <<< "$VERSION"
           MAJOR=${parts[0]}
