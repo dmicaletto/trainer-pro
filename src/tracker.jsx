@@ -52,7 +52,9 @@ import {
   ChevronDown,
   Edit2,
   Maximize2,
-  Trash2
+  Trash2,
+  RefreshCw,
+  Database
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -101,7 +103,7 @@ const db = getFirestore(app);
 // ID App per la struttura del DB
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
 
-// --- DATI INIZIALI (Template Aggiornato) ---
+// --- DATI INIZIALI (Template Aggiornato con Multiplier) ---
 const INITIAL_WORKOUT_DAYS = {
 	'day_1': {
 		name: "Giorno 1: Petto e Tricipiti",
@@ -109,12 +111,7 @@ const INITIAL_WORKOUT_DAYS = {
 			{ 
                 id: 'd1_e1', 
                 name: "Panca Piana - Bilanciere", 
-                sets: [
-                    { reps: 12, weight: 40, completed: false },
-                    { reps: 10, weight: 45, completed: false },
-                    { reps: 10, weight: 50, completed: false },
-                    { reps: 8, weight: 55, completed: false }
-                ],
+                sets: [{ reps: 12, weight: 40, completed: false },{ reps: 10, weight: 45, completed: false },{ reps: 10, weight: 50, completed: false },{ reps: 8, weight: 55, completed: false } ],
                 rest: "90s", 
                 imageUrl: './images/panca-piana.gif', 
                 notes: "Mantieni le spalle basse e concentratevi solo sulla contrazione del petto." 
@@ -131,7 +128,7 @@ const INITIAL_WORKOUT_DAYS = {
                 imageUrl: './images/panca-multypower.gif', 
                 notes: "Movimento controllato, senti l'allungamento." 
             },
-			{ id: 'd1_e3', name: "Croci al Cavo alto", sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "60s", 
+			{ id: 'd1_e3', name: "Croci al Cavo alto", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "60s", 
 			 	imageUrl: './images/Croci-ai-cavi-alti.gif', notes: "Contrazione di picco." },
             { id: 'd1_e4', name: "Chest Press", sets: Array(3).fill({reps: 10, weight: 25, completed: false}), rest: "90s", 
 			 	imageUrl: './images/Chest-Press-Machine.gif', notes: "Spingi i gomiti in avanti." },
@@ -149,9 +146,9 @@ const INITIAL_WORKOUT_DAYS = {
             { id: 'd2_e2', name: "Leg Press", sets: Array(4).fill({reps: 10, weight: 70, completed: false}), rest: "90s", imageUrl: './images/leg-press.png', notes: "Non bloccare le ginocchia." },
 			{ id: 'd2_e3', name: "Leg Extension", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: './images/legext.png', notes: "Non bloccare le ginocchia." },
 			{ id: 'd2_e4', name: "Leg Curl Sdraiato", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: './images/leg-curl-sdraiato-bg.png', notes: "Non bloccare le ginocchia." },
-			{ id: 'd2_e5', name: "Lento avanti panca 70°", sets: Array(4).fill({reps: 10, weight: 14, completed: false}), rest: "90s", imageUrl: './images/lento-manubri.gif', notes: "Non bloccare le ginocchia." },
-			{ id: 'd2_e6', name: "Alzate Laterali", sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/alzate-laterali.png', notes: "Non bloccare le ginocchia." },
-			{ id: 'd2_e7', name: "Alzate posteriori su panca", sets: Array(4).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/inverso-manubri-panca-alta-bg.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e5', name: "Lento avanti panca 70°", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 14, completed: false}), rest: "90s", imageUrl: './images/lento-manubri.gif', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e6', name: "Alzate Laterali", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/alzate-laterali.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e7', name: "Alzate posteriori su panca", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/inverso-manubri-panca-alta-bg.png', notes: "Non bloccare le ginocchia." },
 			{ id: 'd2_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
 			{ id: 'd2_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
@@ -159,11 +156,11 @@ const INITIAL_WORKOUT_DAYS = {
     'day_3': {
 		name: "Giorno 3: Schiena e Bicipiti",
 		exercises: [
-			{ id: 'd3_e1', name: "Rematore Manubri", sets: Array(4).fill({reps: 10, weight: 18, completed: false}), rest: "90s", imageUrl: './images/rematore-manubrio.gif', notes: "Schiena dritta." },
+			{ id: 'd3_e1', name: "Rematore Manubri", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 18, completed: false}), rest: "90s", imageUrl: './images/rematore-manubrio.gif', notes: "Schiena dritta." },
 			{ id: 'd3_e2', name: "Lat Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: './images/lat-machine.png', notes: "Schiena dritta." },
 			{ id: 'd3_e3', name: "Pulley basso con Triangolo", sets: Array(4).fill({reps: 8, weight: 30, completed: false}), rest: "90s", imageUrl: './images/pulley-basso.png', notes: "Petto in fuori, schiena inarcata. Porta il triangolo all'ombelico." },
 			{ id: 'd3_e4', name: "Row Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: './images/Row-Machine.gif', notes: "Schiena dritta." },
-			{ id: 'd3_e5', name: "Curl seduto con Manubri", sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/curl-manubri-seduto-bg.png', notes: "Schiena dritta." },
+			{ id: 'd3_e5', name: "Curl seduto con Manubri", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/curl-manubri-seduto-bg.png', notes: "Schiena dritta." },
 			{ id: 'd3_e6', name: "Hammer curl in piedi", sets: Array(4).fill({reps: 10, weight: 15, completed: false}), rest: "90s", imageUrl: './images/hammer-curl.png', notes: "Schiena dritta." },
 			{ id: 'd3_e7', name: "Trazioni alla sbarra Chin Up", sets: Array(4).fill({reps: 10, weight: 48, completed: false}), rest: "90s", imageUrl: './images/chin-up.gif', notes: "Schiena dritta." },
 			{ id: 'd3_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
@@ -173,17 +170,18 @@ const INITIAL_WORKOUT_DAYS = {
     'day_4': {
 		name: "Giorno 4: Petto e Spalle (Richiamo)",
 		exercises: [
-			{ id: 'd4_e1', name: "Panca Piana Manubri", sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: './images/Chest-Press-con-Manubri-gif.gif', notes: "" },
+			{ id: 'd4_e1', name: "Panca Piana Manubri", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: './images/Chest-Press-con-Manubri-gif.gif', notes: "" },
 			{ id: 'd4_e2', name: "Chest Press distensioni delle braccia", sets: Array(3).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: './images/chestpress.png', notes: "" },
-			{ id: 'd4_e3', name: "Panca Inclinata Manubri", sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: './images/spinte-panca-alta-manubri.png', notes: "inclinata 30 gradi" },
-			{ id: 'd4_e4', name: "Alzate Laterali", sets: Array(3).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/alzate-laterali.png', notes: "" },
-			{ id: 'd4_e5', name: "Alzate Frontali", sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/alzate-frontali.png', notes: "" },
-			{ id: 'd4_e6', name: "Alzate Posteriori su panca", sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/inverso-manubri-panca-alta-bg.png', notes: "" },
+			{ id: 'd4_e3', name: "Panca Inclinata Manubri", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: './images/spinte-panca-alta-manubri.png', notes: "inclinata 30 gradi" },
+			{ id: 'd4_e4', name: "Alzate Laterali", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/alzate-laterali.png', notes: "" },
+			{ id: 'd4_e5', name: "Alzate Frontali", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/alzate-frontali.png', notes: "" },
+			{ id: 'd4_e6', name: "Alzate Posteriori su panca", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/inverso-manubri-panca-alta-bg.png', notes: "" },
 			{ id: 'd4_e7', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
 			{ id: 'd4_e8', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
 	}
 };
+
 const getImageUrl = (url, name) => {
     if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
@@ -356,26 +354,30 @@ export default function App() {
       } catch (e) { console.error("Defaults Save Error:", e); }
   };
 
+  // Funzione Aggiornata per Calcolo Volume Completato (con Multiplier)
   const calculateCompletedVolume = (session) => {
       if (!session) return 0;
       let total = 0;
       session.exercises.forEach(ex => {
+          const multiplier = ex.multiplier || 1; // Default a 1 se non specificato
           ex.sets.forEach(set => {
               if (set.completed && set.weight > 0 && set.reps > 0) {
-                  total += (set.weight || 0) * (set.reps || 0);
+                  total += (set.weight * set.reps * multiplier);
               }
           });
       });
       return total;
   };
 
+  // Funzione Aggiornata per Calcolo Volume Totale (con Multiplier) - usato in Storico
   const calculateTotalVolume = (session) => {
       if (!session) return 0;
       let total = 0;
       session.exercises.forEach(ex => {
+          const multiplier = ex.multiplier || 1;
           ex.sets.forEach(set => {
               if (set.weight > 0 && set.reps > 0) {
-                  total += (set.weight || 0) * (set.reps || 0);
+                  total += (set.weight * set.reps * multiplier);
               }
           });
       });
@@ -408,6 +410,15 @@ export default function App() {
       }
   };
   const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
+
+  // --- FUNZIONI DI UTILITÀ PER LE DATE ---
+  const getWeekNumber = (date) => {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+      return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+  };
 
   // --- CARICAMENTO STORICO E GRAFICI ---
   const loadHistory = async (isInitial = false) => {
@@ -457,25 +468,47 @@ export default function App() {
           const querySnapshot = await getDocs(q);
           const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           
-          const weeklyLogs = logs.slice(0, 7).reverse();
+          const weeklyAggregation = {};
+          
+          logs.forEach(log => {
+              const logDate = new Date(log.date);
+              const weekNum = getWeekNumber(logDate);
+              const year = logDate.getFullYear();
+              const key = `${year}-W${weekNum}`;
+              
+              if (!weeklyAggregation[key]) {
+                  weeklyAggregation[key] = 0;
+              }
+              weeklyAggregation[key] += (log.totalTonnage || 0);
+          });
+
+          const sortedWeeks = Object.keys(weeklyAggregation).sort().slice(-8); 
+          
           setWeeklyVolumeData({
-              labels: weeklyLogs.map(l => l.date.slice(5)), 
+              labels: sortedWeeks.map(w => w.replace('-', '\n')), 
               datasets: [{
-                  label: 'Volume (Kg)',
-                  data: weeklyLogs.map(l => l.totalTonnage),
+                  label: 'Volume Totale (Kg)',
+                  data: sortedWeeks.map(w => weeklyAggregation[w]),
                   backgroundColor: 'rgba(59, 130, 246, 0.5)',
                   borderColor: 'rgba(59, 130, 246, 1)',
                   borderWidth: 1,
               }]
           });
           
-          const last30DaysLogs = logs.filter(l => (new Date() - new Date(l.date)) / (1000 * 60 * 60 * 24) <= 30);
-          const monthlyLogs = last30DaysLogs.reverse();
+          const monthlyAggregation = {};
+          logs.forEach(log => {
+             const d = new Date(log.date);
+             const key = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+             if(!monthlyAggregation[key]) monthlyAggregation[key] = 0;
+             monthlyAggregation[key] += (log.totalTonnage || 0);
+          });
+          const sortedMonths = Object.keys(monthlyAggregation).sort().slice(-6);
+
           setMonthlyVolumeData({
-               labels: monthlyLogs.map(l => l.date.slice(5)),
+               labels: sortedMonths,
                datasets: [{
                    label: 'Volume (Kg)',
-                   data: monthlyLogs.map(l => l.totalTonnage),
+                   data: sortedMonths.map(m => monthlyAggregation[m]),
                    backgroundColor: 'rgba(16, 185, 129, 0.5)',
                    borderColor: 'rgba(16, 185, 129, 1)',
                    borderWidth: 1,
@@ -592,15 +625,11 @@ export default function App() {
               }
           } catch(e) { console.error("Error fetching last session:", e); }
       
-          // Carica Defaults: FIX CRITICO
+          // Carica Defaults
           const userDefaults = await fetchUserDefaults(user.uid);
           sessionData.exercises = sessionData.exercises.map(ex => {
               if (userDefaults[ex.id]) {
-                  // Mappa i set esistenti con i valori salvati se presenti
                   const savedSetsData = userDefaults[ex.id];
-                  // Se savedSetsData è un array (vecchia versione) o oggetto (nuova versione)
-                  // Qui assumiamo che userDefaults[ex.id] sia un oggetto/array con chiavi indicizzate
-                  
                   const mergedSets = ex.sets.map((set, idx) => {
                       const savedSet = savedSetsData[idx];
                       if (savedSet) {
@@ -923,7 +952,16 @@ export default function App() {
                             <div className="p-5 flex-1 flex flex-col gap-4">
                                 <div className="space-y-1">
                                     <div className={`grid ${view === 'active-workout' ? 'grid-cols-5' : 'grid-cols-4'} text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center px-2 mb-1`}>
-                                        <div>#</div><div>Kg</div><div>Reps</div>{view === 'active-workout' && <div>Fatto</div>}<div>Stato</div>
+                                        <div>#</div>
+                                        <div className="flex items-center justify-center">
+                                            Kg
+                                            {/* Visual indicator for multiplier */}
+                                            {exercise.multiplier > 1 && (
+                                                <span className="ml-1 text-[8px] bg-yellow-500 text-black px-1 rounded font-extrabold">x{exercise.multiplier}</span>
+                                            )}
+                                        </div>
+                                        <div>Reps</div>
+                                        {view === 'active-workout' && <div>Fatto</div>}<div>Stato</div>
                                     </div>
                                     {exercise.sets.map((set, setIdx) => (
                                         <div key={setIdx} className={`grid ${view === 'active-workout' ? 'grid-cols-5' : 'grid-cols-4'} items-center text-center py-2 rounded-lg border transition-colors ${set.completed ? 'bg-green-900/10 border-green-900/30' : 'bg-gray-800/30 border-gray-800/50'}`}>
