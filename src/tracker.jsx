@@ -52,9 +52,7 @@ import {
   ChevronDown,
   Edit2,
   Maximize2,
-  Database,
-  RefreshCw,
-  Trash2 // Corretto: Aggiunto Trash2 agli import
+  Trash2
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -103,7 +101,7 @@ const db = getFirestore(app);
 // ID App per la struttura del DB
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
 
-// --- DATI INIZIALI (Template) ---
+// --- DATI INIZIALI (Template Aggiornato) ---
 const INITIAL_WORKOUT_DAYS = {
 	'day_1': {
 		name: "Giorno 1: Petto e Tricipiti",
@@ -186,7 +184,6 @@ const INITIAL_WORKOUT_DAYS = {
 		]
 	}
 };
-
 const getImageUrl = (url, name) => {
     if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
@@ -266,7 +263,7 @@ export default function App() {
   const [activeSession, setActiveSession] = useState(null);
   const [sessionTimer, setSessionTimer] = useState(0);
   const [startTime, setStartTime] = useState(null);
-  const [lastSessionTonnage, setLastSessionTonnage] = useState(null); 
+  const [lastSessionTonnage, setLastSessionTonnage] = useState(0); 
   
   // UI States
   const [restTimer, setRestTimer] = useState({ isOpen: false, timeLeft: 0, totalTime: 0 });
@@ -455,7 +452,7 @@ export default function App() {
            const q = query(
               collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
               orderBy("date", "desc"),
-              limit(50)
+              limit(100)
           );
           const querySnapshot = await getDocs(q);
           const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -577,7 +574,7 @@ export default function App() {
       setLoading(true);
       
       // Recupera ultimo tonnellaggio
-      setLastSessionTonnage(null);
+      setLastSessionTonnage(0);
       if (user && user.uid !== 'mock-user') {
           try {
               const q = query(
@@ -590,18 +587,29 @@ export default function App() {
                   .map(d => d.data())
                   .find(w => w.dayName === dayTemplate.name);
                   
-              if (lastWorkout) {
+              if (lastWorkout && lastWorkout.totalTonnage) {
                   setLastSessionTonnage(lastWorkout.totalTonnage);
               }
           } catch(e) { console.error("Error fetching last session:", e); }
       
-          // Carica Defaults
+          // Carica Defaults: FIX CRITICO
           const userDefaults = await fetchUserDefaults(user.uid);
           sessionData.exercises = sessionData.exercises.map(ex => {
               if (userDefaults[ex.id]) {
+                  // Mappa i set esistenti con i valori salvati se presenti
+                  const savedSetsData = userDefaults[ex.id];
+                  // Se savedSetsData è un array (vecchia versione) o oggetto (nuova versione)
+                  // Qui assumiamo che userDefaults[ex.id] sia un oggetto/array con chiavi indicizzate
+                  
                   const mergedSets = ex.sets.map((set, idx) => {
-                      const savedSet = userDefaults[ex.id][idx];
-                      if (savedSet) return { ...set, weight: savedSet.weight || set.weight, reps: savedSet.reps || set.reps };
+                      const savedSet = savedSetsData[idx];
+                      if (savedSet) {
+                          return { 
+                              ...set, 
+                              weight: savedSet.weight !== undefined ? savedSet.weight : set.weight, 
+                              reps: savedSet.reps !== undefined ? savedSet.reps : set.reps 
+                          };
+                      }
                       return set;
                   });
                   return { ...ex, sets: mergedSets };
@@ -790,7 +798,11 @@ export default function App() {
                         </div>
                         <div className="flex gap-2 text-xs font-mono">
                              <span className="text-green-400">Vol: {calculateCompletedVolume(activeSession)} kg</span>
-                             {lastSessionTonnage > 0 && <span className="text-gray-500">| Last: {lastSessionTonnage} kg</span>}
+                             {lastSessionTonnage > 0 && (
+                                <span className="text-gray-500 border-l border-gray-700 pl-2">
+                                   Last: {lastSessionTonnage} kg
+                                </span>
+                             )}
                         </div>
                     </div>
                 </div>
