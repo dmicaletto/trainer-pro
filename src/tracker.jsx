@@ -134,7 +134,7 @@ const INITIAL_WORKOUT_DAYS = {
 			 	imageUrl: './images/Chest-Press-Machine.gif', notes: "Spingi i gomiti in avanti." },
             { id: 'd1_e5', name: "Pull Over", sets: Array(3).fill({reps: 12, weight: 20, completed: false}), rest: "90s", imageUrl: './images/pullover.gif', notes: "" },
 			{ id: 'd1_e6', name: "Spinte in Basso (Pushdown)", sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "90s", imageUrl: './images/pushdown.png', notes: "" },
-			{ id: 'd1_e7', name: "French Press (Manubri) panca 30°", sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "90s", imageUrl: './images/french-press.png', notes: "" },
+			{ id: 'd1_e7', name: "French Press (Manubri) panca 30°", multiplier: 2, sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "90s", imageUrl: './images/french-press.png', notes: "" },
 			{ id: 'd1_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
 			{ id: 'd1_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
