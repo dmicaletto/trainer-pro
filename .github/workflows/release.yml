@@ -15,7 +15,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Importante per analizzare la storia dei commit
+          fetch-depth: 0 # Importante: scarica tutta la storia dei commit
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -26,26 +26,30 @@ jobs:
       - name: Determine Version Bump
         id: bump
         run: |
-          # Recupera l'ultimo tag
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          echo "Last tag found: '$LAST_TAG'"
+          # Prova a recuperare l'ultimo tag. Se fallisce, LAST_TAG sarà vuoto.
+          if ! LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null); then
+            echo "No tags found. This is the first release."
+            LAST_TAG=""
+          else
+            echo "Last tag found: '$LAST_TAG'"
+          fi
           
           if [ -z "$LAST_TAG" ]; then
-            # Se non ci sono tag, analizza tutti i commit dall'inizio
-            echo "No previous tags found. Analyzing all commits."
+            # Se non ci sono tag, analizza TUTTI i commit dall'inizio
+            echo "Analyzing all commits from the beginning..."
             COMMITS=$(git log --pretty=format:"%s")
-            # Se è il primo rilascio, impostiamo un default di partenza o usiamo la versione del package.json
-            LAST_TAG="v0.0.0" 
+            # Impostiamo una versione base fittizia per il calcolo successivo
+            LAST_TAG="v0.0.0"
           else
-            # Analizza i commit dall'ultimo tag
-            echo "Analyzing commits since $LAST_TAG"
+            # Analizza i commit dall'ultimo tag a HEAD
+            echo "Analyzing commits since $LAST_TAG..."
             COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"%s")
           fi
           
           # Default: nessun bump
           BUMP="none"
           
-          # Logica Semantic Release semplificata
+          # Logica Semantic Release semplificata (priorità: major > minor > patch)
           if echo "$COMMITS" | grep -q "BREAKING CHANGE"; then
             BUMP="major"
           elif echo "$COMMITS" | grep -q "^feat"; then
@@ -67,11 +71,15 @@ jobs:
           # Rimuove la 'v' iniziale se presente
           VERSION=${LAST_TAG#v}
           
-          # Se la versione è vuota o 0.0.0, proviamo a leggere dal package.json corrente come fallback
+          # Se siamo al primo rilascio (0.0.0), proviamo a leggere dal package.json
+          # Se il package.json ha già una versione (es. 1.0.0), usiamo quella come base
           if [ "$VERSION" == "0.0.0" ]; then
              CURRENT_PKG_VERSION=$(node -p "require('./package.json').version")
              if [ "$CURRENT_PKG_VERSION" != "0.0.0" ]; then
                 VERSION=$CURRENT_PKG_VERSION
+                # Se usiamo la versione del package.json, decrementiamo la parte che verrà bumpata
+                # per ottenere l'effetto desiderato (es. se è 1.0.0 e facciamo fix, vogliamo 1.0.1)
+                # Tuttavia, per semplicità, se c'è già una versione manuale, la rispettiamo e applichiamo il bump su quella.
              fi
           fi
 
@@ -95,10 +103,10 @@ jobs:
           fi
           
           NEW_TAG="v$MAJOR.$MINOR.$PATCH"
-          echo "New version: $NEW_TAG"
+          echo "New version calculated: $NEW_TAG"
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
-      # Aggiorna package.json (Opzionale ma consigliato per app JS)
+      # Aggiorna package.json e crea commit
       - name: Update package.json version
         if: steps.bump.outputs.bump != 'none'
         run: |
@@ -106,17 +114,23 @@ jobs:
           # Rimuovi la 'v' per il package.json
           CLEAN_VERSION=${NEW_VERSION#v}
           
+          echo "Updating package.json to $CLEAN_VERSION"
           npm version $CLEAN_VERSION --no-git-tag-version
           
-          # Configura git per il commit
+          # Configura git
           git config --global user.name 'GitHub Action'
           git config --global user.email 'action@github.com'
           
-          git add package.json package-lock.json
+          git add package.json
+          # Se esiste package-lock.json, aggiungilo
+          if [ -f "package-lock.json" ]; then
+            git add package-lock.json
+          fi
+          
           git commit -m "chore(release): bump version to $CLEAN_VERSION [skip ci]"
           git push
 
-      # Crea la Release su GitHub
+      # Crea la Release e il Tag su GitHub
       - name: Create Release
         if: steps.bump.outputs.bump != 'none'
         uses: softprops/action-gh-release@v1
