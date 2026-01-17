@@ -52,9 +52,7 @@ import {
   ChevronDown,
   Edit2,
   Maximize2,
-  Trash2,
-  RefreshCw,
-  Database
+  Trash2
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -102,8 +100,9 @@ const db = getFirestore(app);
 
 // ID App per la struttura del DB
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
+const APP_VERSION = "1.2.2"; // Bump versione manuale per visualizzazione
 
-// --- DATI INIZIALI (Template Aggiornato con Multiplier) ---
+// --- DATI INIZIALI (Template Aggiornato) ---
 const INITIAL_WORKOUT_DAYS = {
 	'day_1': {
 		name: "Giorno 1: Petto e Tricipiti",
@@ -181,7 +180,6 @@ const INITIAL_WORKOUT_DAYS = {
 		]
 	}
 };
-
 const getImageUrl = (url, name) => {
     if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
@@ -264,7 +262,7 @@ export default function App() {
   const [lastSessionTonnage, setLastSessionTonnage] = useState(0); 
   
   // UI States
-  const [restTimer, setRestTimer] = useState({ isOpen: false, timeLeft: 0, totalTime: 0 });
+  const [restTimer, setRestTimer] = useState({ isOpen: false, timeLeft: 0, totalTime: 0, activeExerciseIndex: null }); 
   const [finishModalOpen, setFinishModalOpen] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null); 
   const [rating, setRating] = useState(0);
@@ -354,12 +352,11 @@ export default function App() {
       } catch (e) { console.error("Defaults Save Error:", e); }
   };
 
-  // Funzione Aggiornata per Calcolo Volume Completato (con Multiplier)
   const calculateCompletedVolume = (session) => {
       if (!session) return 0;
       let total = 0;
       session.exercises.forEach(ex => {
-          const multiplier = ex.multiplier || 1; // Default a 1 se non specificato
+          const multiplier = ex.multiplier || 1; 
           ex.sets.forEach(set => {
               if (set.completed && set.weight > 0 && set.reps > 0) {
                   total += (set.weight * set.reps * multiplier);
@@ -369,7 +366,6 @@ export default function App() {
       return total;
   };
 
-  // Funzione Aggiornata per Calcolo Volume Totale (con Multiplier) - usato in Storico
   const calculateTotalVolume = (session) => {
       if (!session) return 0;
       let total = 0;
@@ -384,12 +380,13 @@ export default function App() {
       return total;
   };
 
-  const openRestTimer = (seconds) => {
-      setRestTimer({ isOpen: true, timeLeft: seconds, totalTime: seconds });
+  const openRestTimer = (seconds, exIndex) => {
+      setRestTimer({ isOpen: true, timeLeft: seconds, totalTime: seconds, activeExerciseIndex: exIndex });
   };
   
   const closeRestTimer = () => {
-      setRestTimer({ isOpen: false, timeLeft: 0, totalTime: 0 });
+      // Chiusura manuale, non avanzare
+      setRestTimer({ isOpen: false, timeLeft: 0, totalTime: 0, activeExerciseIndex: null });
   };
   
   const scrollToExercise = (index) => {
@@ -411,15 +408,6 @@ export default function App() {
   };
   const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
 
-  // --- FUNZIONI DI UTILITÀ PER LE DATE ---
-  const getWeekNumber = (date) => {
-      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-      const dayNum = d.getUTCDay() || 7;
-      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-      const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-      return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
-  };
-
   // --- CARICAMENTO STORICO E GRAFICI ---
   const loadHistory = async (isInitial = false) => {
       if (!user || ['mock-user', 'test-user'].includes(user.uid)) return;
@@ -439,7 +427,7 @@ export default function App() {
           const querySnapshot = await getDocs(q);
           const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-          // FIX ORDINAMENTO: Combina data e ora per ordinamento assoluto corretto
+          // FIX ORDINAMENTO: Data + Ora
           logs.sort((a, b) => {
               const dateA = new Date(`${a.date}T${a.startTime}`);
               const dateB = new Date(`${b.date}T${b.startTime}`);
@@ -472,13 +460,15 @@ export default function App() {
           
           logs.forEach(log => {
               const logDate = new Date(log.date);
-              const weekNum = getWeekNumber(logDate);
-              const year = logDate.getFullYear();
-              const key = `${year}-W${weekNum}`;
+              const d = new Date(Date.UTC(logDate.getFullYear(), logDate.getMonth(), logDate.getDate()));
+              const dayNum = d.getUTCDay() || 7;
+              d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+              const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+              const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
               
-              if (!weeklyAggregation[key]) {
-                  weeklyAggregation[key] = 0;
-              }
+              const key = `${logDate.getFullYear()}-W${weekNum}`;
+              
+              if (!weeklyAggregation[key]) weeklyAggregation[key] = 0;
               weeklyAggregation[key] += (log.totalTonnage || 0);
           });
 
@@ -569,7 +559,7 @@ export default function App() {
           }
       } else {
           const seconds = parseRestTime(exercise.rest);
-          openRestTimer(seconds);
+          openRestTimer(seconds, exerciseIndex); // Passa l'indice per auto-advance
       }
   };
 
@@ -606,10 +596,11 @@ export default function App() {
       let sessionData = JSON.parse(JSON.stringify(dayTemplate));
       setLoading(true);
       
-      // Recupera ultimo tonnellaggio
+      // Recupera ultimo tonnellaggio e Defaults
       setLastSessionTonnage(0);
       if (user && user.uid !== 'mock-user') {
           try {
+              // 1. Cerca ultimo allenamento
               const q = query(
                   collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
                   orderBy("date", "desc"),
@@ -623,29 +614,30 @@ export default function App() {
               if (lastWorkout && lastWorkout.totalTonnage) {
                   setLastSessionTonnage(lastWorkout.totalTonnage);
               }
-          } catch(e) { console.error("Error fetching last session:", e); }
-      
-          // Carica Defaults
-          const userDefaults = await fetchUserDefaults(user.uid);
-          sessionData.exercises = sessionData.exercises.map(ex => {
-              if (userDefaults[ex.id]) {
-                  const savedSetsData = userDefaults[ex.id];
-                  const mergedSets = ex.sets.map((set, idx) => {
-                      const savedSet = savedSetsData[idx];
-                      if (savedSet) {
-                          return { 
-                              ...set, 
-                              weight: savedSet.weight !== undefined ? savedSet.weight : set.weight, 
-                              reps: savedSet.reps !== undefined ? savedSet.reps : set.reps 
-                          };
-                      }
-                      return set;
-                  });
-                  return { ...ex, sets: mergedSets };
-              }
-              return ex;
-          });
+
+              // 2. Carica Defaults
+              const userDefaults = await fetchUserDefaults(user.uid);
+              sessionData.exercises = sessionData.exercises.map(ex => {
+                  if (userDefaults[ex.id]) {
+                      const savedSetsData = userDefaults[ex.id];
+                      const mergedSets = ex.sets.map((set, idx) => {
+                          const savedSet = savedSetsData[idx];
+                          if (savedSet) {
+                              return { 
+                                  ...set, 
+                                  weight: savedSet.weight !== undefined ? savedSet.weight : set.weight, 
+                                  reps: savedSet.reps !== undefined ? savedSet.reps : set.reps 
+                              };
+                          }
+                          return set;
+                      });
+                      return { ...ex, sets: mergedSets };
+                  }
+                  return ex;
+              });
+          } catch(e) { console.error("Error fetching data:", e); }
       }
+      
       setLoading(false);
       setActiveSession(sessionData);
       setStartTime(new Date());
@@ -661,7 +653,6 @@ export default function App() {
       const endTime = new Date();
       const durationSeconds = sessionTimer;
       
-      // FIX ORARIO: Usa sempre formato 2 cifre
       const formatTime = (date) => {
         return date.toLocaleTimeString('it-IT', { 
             hour: '2-digit', 
@@ -750,10 +741,25 @@ export default function App() {
       return () => clearInterval(interval);
   }, [view, finishModalOpen]);
 
+  // Gestione Timer Riposo e Avanzamento Automatico
   useEffect(() => {
       let interval;
-      if (restTimer.isOpen && restTimer.timeLeft > 0) { interval = setInterval(() => { setRestTimer(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 })); }, 1000); }
-      else if (restTimer.isOpen && restTimer.timeLeft <= 0 && navigator.vibrate) { navigator.vibrate([200, 100, 200]); }
+      if (restTimer.isOpen && restTimer.timeLeft > 0) {
+          interval = setInterval(() => {
+              setRestTimer(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 }));
+          }, 1000);
+      } else if (restTimer.isOpen && restTimer.timeLeft <= 0) {
+          if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+          
+          setRestTimer(prev => ({ ...prev, isOpen: false }));
+          
+          // NUOVO: Avanzamento automatico a fine timer
+          if (restTimer.activeExerciseIndex !== null) {
+              scrollToExercise(restTimer.activeExerciseIndex); // Rimane sullo stesso se non è finito, o passa al prossimo se l'utente clicca next. 
+              // La logica originale era che alla fine del timer si torna alla scheda per fare la serie successiva.
+              // L'avanzamento esercizio avviene SOLO se era l'ULTIMA serie (già gestito in handleSetCompletion)
+          }
+      }
       return () => clearInterval(interval);
   }, [restTimer.isOpen, restTimer.timeLeft]);
 
@@ -863,6 +869,7 @@ export default function App() {
                 </div>
                 <div className="mt-auto pt-4 border-t border-gray-800">
                     <button onClick={handleLogout} className="w-full flex items-center p-3 rounded-xl text-red-400 hover:bg-red-500/10"><LogOut className="w-5 h-5 mr-3" />Esci</button>
+                    <div className="text-center text-xs text-gray-600 mt-4">v{APP_VERSION}</div> {/* NUOVO: Versione App */}
                 </div>
               </div>
           </div>
