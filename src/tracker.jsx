@@ -85,7 +85,15 @@ ChartJS.register(
 );
 
 // --- CONFIGURAZIONE FIREBASE ---
-const firebaseConfig = JSON.parse(localStorage.getItem('firebase_config') || '{}');
+// --- CONFIGURAZIONE FIREBASE ---
+const firebaseConfig = {
+  apiKey: "AIzaSyCfTXY1foD8Dr9UxRNzLeOu680aNtIw4TA",
+  authDomain: "training-c0b76.firebaseapp.com",
+  projectId: "training-c0b76",
+  storageBucket: "training-c0b76.firebasestorage.app",
+  messagingSenderId: "149618028951",
+  appId: "1:149618028951:web:eca42664d47ab6d71954d2"
+};
 const safeConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
 
 const app = initializeApp(safeConfig);
@@ -96,67 +104,86 @@ const db = getFirestore(app);
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
 const APP_VERSION = "1.2.3"; // Bump versione
 
-// --- DATI INIZIALI (Template Aggiornato) ---
 const INITIAL_WORKOUT_DAYS = {
 	'day_1': {
 		name: "Giorno 1: Petto e Tricipiti",
 		exercises: [
-			{ id: 'd1_e1', name: "Panca Piana - Bilanciere", sets: [ { reps: 12, weight: 40, completed: false }, { reps: 10, weight: 45, completed: false }, { reps: 10, weight: 50, completed: false }, { reps: 8, weight: 55, completed: false } ], rest: "90s", imageUrl: '/images/panca-piana.gif', notes: "Mantieni le spalle basse e concentratevi solo sulla contrazione del petto." },
-			{ id: 'd1_e2', name: "Panca 30° Multypower", sets: [ { reps: 10, weight: 40, completed: false }, { reps: 10, weight: 40, completed: false }, { reps: 10, weight: 40, completed: false } ], rest: "90s", imageUrl: '/images/panca-multypower.gif', notes: "Movimento controllato, senti l'allungamento." },
-            { id: 'd1_e3', name: "Croci al Cavo alto", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "60s", imageUrl: '/images/Croci-ai-cavi-alti.gif', notes: "Contrazione di picco. (Peso per lato)" },
-            { id: 'd1_e4', name: "Chest Press", sets: Array(3).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/Chest-Press-Machine.gif', notes: "Spingi i gomiti in avanti." },
-            { id: 'd1_e5', name: "Pull Over", sets: Array(3).fill({reps: 12, weight: 20, completed: false}), rest: "90s", imageUrl: '/images/pullover.gif', notes: "" },
-            { id: 'd1_e6', name: "Spinte in Basso (Pushdown)", sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "60s", imageUrl: '/images/pushdown.png', notes: "" },
-            { id: 'd1_e7', name: "French Press (Manubri)", multiplier: 2, sets: Array(3).fill({reps: 12, weight: 12, completed: false}), rest: "90s", imageUrl: '/images/french-press.png', notes: "Due manubri." },
-            { id: 'd1_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 40, completed: false}), rest: "60s", imageUrl: '/images/hyperextension.gif', notes: "" },
-            { id: 'd1_e9', name: "Abdominal Crunch", sets: Array(4).fill({reps: 15, weight: 20, completed: false}), rest: "90s", imageUrl: '/images/ABS_CRUNCH_MC.gif', notes: "" },
+			{ 
+                id: 'd1_e1', 
+                name: "Panca Piana - Bilanciere", 
+                sets: [{ reps: 12, weight: 40, completed: false },{ reps: 10, weight: 45, completed: false },{ reps: 10, weight: 50, completed: false },{ reps: 8, weight: 55, completed: false } ],
+                rest: "90s", 
+                imageUrl: './images/panca-piana.gif', 
+                notes: "Mantieni le spalle basse e concentratevi solo sulla contrazione del petto." 
+            },
+			{ 
+                id: 'd1_e2', 
+                name: "Panca 30° Multypower", 
+                sets: [
+                    { reps: 10, weight: 40, completed: false },
+                    { reps: 10, weight: 40, completed: false },
+                    { reps: 10, weight: 40, completed: false }
+                ], 
+                rest: "90s", 
+                imageUrl: './images/panca-multypower.gif', 
+                notes: "Movimento controllato, senti l'allungamento." 
+            },
+			{ id: 'd1_e3', name: "Croci al Cavo alto", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "60s", 
+			 	imageUrl: './images/Croci-ai-cavi-alti.gif', notes: "Contrazione di picco." },
+            { id: 'd1_e4', name: "Chest Press", sets: Array(3).fill({reps: 10, weight: 25, completed: false}), rest: "90s", 
+			 	imageUrl: './images/Chest-Press-Machine.gif', notes: "Spingi i gomiti in avanti." },
+            { id: 'd1_e5', name: "Pull Over", sets: Array(3).fill({reps: 12, weight: 20, completed: false}), rest: "90s", imageUrl: './images/pullover.gif', notes: "" },
+			{ id: 'd1_e6', name: "Spinte in Basso (Pushdown)", sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "90s", imageUrl: './images/pushdown.png', notes: "" },
+			{ id: 'd1_e7', name: "French Press (Manubri) panca 30°", multiplier: 2, sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "90s", imageUrl: './images/french-press.png', notes: "" },
+			{ id: 'd1_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
+			{ id: 'd1_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
 	},
 	'day_2': {
 		name: "Giorno 2: Gambe e Spalle",
 		exercises: [
-			{ id: 'd2_e1', name: "Calf Raises", sets: Array(4).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: '/images/Calf-Press-on-Leg-Press-Machine.gif', notes: "" },
-            { id: 'd2_e2', name: "Leg Press", sets: Array(4).fill({reps: 10, weight: 70, completed: false}), rest: "90s", imageUrl: '/images/leg-press.png', notes: "Non bloccare le ginocchia." },
-            { id: 'd2_e3', name: "Leg Extension", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/legext.png', notes: "Non bloccare le ginocchia." },
-            { id: 'd2_e4', name: "Leg Curl Sdraiato", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/leg-curl-sdraiato-bg.png', notes: "Non bloccare le ginocchia." },
-            { id: 'd2_e5', name: "Lento Avanti", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 14, completed: false}), rest: "90s", imageUrl: '/images/lento-manubri.gif', notes: "Non bloccare le ginocchia." },
-            { id: 'd2_e6', name: "Alzate Laterali", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "60s", imageUrl: '/images/alzate-laterali.png', notes: "Non bloccare le ginocchia." },
-            { id: 'd2_e7', name: "Alzate Posteriori", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: '/images/inverso-manubri-panca-alta-bg.png', notes: "Non bloccare le ginocchia." },
-            { id: 'd2_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: '/images/hyperextension.gif', notes: "" },
-            { id: 'd2_e9', name: "Abdominal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/ABS_CRUNCH_MC.gif', notes: "" },
+			{ id: 'd2_e1', name: "Calf Raises on leg press", sets: Array(4).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: './images/Calf-Press-on-Leg-Press-Machine.gif', notes: "" },
+            { id: 'd2_e2', name: "Leg Press", sets: Array(4).fill({reps: 10, weight: 70, completed: false}), rest: "90s", imageUrl: './images/leg-press.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e3', name: "Leg Extension", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: './images/legext.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e4', name: "Leg Curl Sdraiato", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: './images/leg-curl-sdraiato-bg.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e5', name: "Lento avanti panca 70°", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 14, completed: false}), rest: "90s", imageUrl: './images/lento-manubri.gif', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e6', name: "Alzate Laterali", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/alzate-laterali.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e7', name: "Alzate posteriori su panca", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/inverso-manubri-panca-alta-bg.png', notes: "Non bloccare le ginocchia." },
+			{ id: 'd2_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
+			{ id: 'd2_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
 	},
     'day_3': {
 		name: "Giorno 3: Schiena e Bicipiti",
 		exercises: [
-			{ id: 'd3_e1', name: "Rematore Manubri", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 18, completed: false}), rest: "90s", imageUrl: '/images/rematore-manubrio.gif', notes: "Schiena dritta." },
-            { id: 'd3_e2', name: "Lat Machine", sets: Array(4).fill({reps: 10, weight: 50, completed: false}), rest: "90s", imageUrl: '/images/lat-machine.png', notes: "Schiena dritta." },
-            { id: 'd3_e3', name: "Pulley Basso", sets: Array(4).fill({reps: 8, weight: 30, completed: false}), rest: "90s", imageUrl: '/images/pulley-basso.png', notes: "Petto in fuori, schiena inarcata. Porta il triangolo all'ombelico." },
-            { id: 'd3_e4', name: "Row Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: '/images/Row-Machine.gif', notes: "Schiena dritta." },
-            { id: 'd3_e5', name: "Curl Manubri", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: '/images/curl-manubri-seduto-bg.png', notes: "Schiena dritta." },
-            { id: 'd3_e6', name: "Hammer Curl", sets: Array(4).fill({reps: 10, weight: 15, completed: false}), rest: "90s", imageUrl: '/images/hammer-curl.png', notes: "Schiena dritta." },
-            { id: 'd3_e7', name: "Chin Up", sets: Array(4).fill({reps: 10, weight: 48, completed: false}), rest: "90s", imageUrl: '/images/chin-up.gif', notes: "Schiena dritta." },
-            { id: 'd3_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: '/images/hyperextension.gif', notes: "" },
-            { id: 'd3_e9', name: "Abdominal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/ABS_CRUNCH_MC.gif', notes: "" },
+			{ id: 'd3_e1', name: "Rematore Manubri", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 18, completed: false}), rest: "90s", imageUrl: './images/rematore-manubrio.gif', notes: "Schiena dritta." },
+			{ id: 'd3_e2', name: "Lat Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: './images/lat-machine.png', notes: "Schiena dritta." },
+			{ id: 'd3_e3', name: "Pulley basso con Triangolo", sets: Array(4).fill({reps: 8, weight: 30, completed: false}), rest: "90s", imageUrl: './images/pulley-basso.png', notes: "Petto in fuori, schiena inarcata. Porta il triangolo all'ombelico." },
+			{ id: 'd3_e4', name: "Row Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: './images/Row-Machine.gif', notes: "Schiena dritta." },
+			{ id: 'd3_e5', name: "Curl seduto con Manubri", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/curl-manubri-seduto-bg.png', notes: "Schiena dritta." },
+			{ id: 'd3_e6', name: "Hammer curl in piedi", sets: Array(4).fill({reps: 10, weight: 15, completed: false}), rest: "90s", imageUrl: './images/hammer-curl.png', notes: "Schiena dritta." },
+			{ id: 'd3_e7', name: "Trazioni alla sbarra Chin Up", sets: Array(4).fill({reps: 10, weight: 48, completed: false}), rest: "90s", imageUrl: './images/chin-up.gif', notes: "Schiena dritta." },
+			{ id: 'd3_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
+			{ id: 'd3_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
 	},
     'day_4': {
 		name: "Giorno 4: Petto e Spalle (Richiamo)",
 		exercises: [
-			{ id: 'd4_e1', name: "Panca Piana Manubri", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: '/images/Chest-Press-con-Manubri-gif.gif', notes: "" },
-			{ id: 'd4_e2', name: "Chest Press", sets: Array(3).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: '/images/chestpress.png', notes: "" },
-			{ id: 'd4_e3', name: "Panca Inclinata Manubri", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: '/images/spinte-panca-alta-manubri.png', notes: "inclinata 30 gradi" },
-			{ id: 'd4_e4', name: "Alzate Laterali", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 12, completed: false}), rest: "60s", imageUrl: '/images/alzate-laterali.png', notes: "" },
-			{ id: 'd4_e5', name: "Alzate Frontali", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "60s", imageUrl: '/images/alzate-frontali.png', notes: "" },
-			{ id: 'd4_e6', name: "Alzate Posteriori", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: '/images/inverso-manubri-panca-alta-bg.png', notes: "" },
-			{ id: 'd4_e7', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: '/images/hyperextension.gif', notes: "" },
-			{ id: 'd4_e8', name: "Abdominal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/ABS_CRUNCH_MC.gif', notes: "" },
+			{ id: 'd4_e1', name: "Panca Piana Manubri", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: './images/Chest-Press-con-Manubri-gif.gif', notes: "" },
+			{ id: 'd4_e2', name: "Chest Press distensioni delle braccia", sets: Array(3).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: './images/chestpress.png', notes: "" },
+			{ id: 'd4_e3', name: "Panca Inclinata Manubri", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: './images/spinte-panca-alta-manubri.png', notes: "inclinata 30 gradi" },
+			{ id: 'd4_e4', name: "Alzate Laterali", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/alzate-laterali.png', notes: "" },
+			{ id: 'd4_e5', name: "Alzate Frontali", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/alzate-frontali.png', notes: "" },
+			{ id: 'd4_e6', name: "Alzate Posteriori su panca", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/inverso-manubri-panca-alta-bg.png', notes: "" },
+			{ id: 'd4_e7', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
+			{ id: 'd4_e8', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
 		]
 	}
 };
 
 const getImageUrl = (url, name) => {
-    if (url && (url.startsWith('http') || url.startsWith('/'))) return url;
+    if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
 };
 
