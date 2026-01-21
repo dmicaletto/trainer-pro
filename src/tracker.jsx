@@ -52,7 +52,8 @@ import {
   ChevronDown,
   Edit2,
   Maximize2,
-  Trash2
+  Trash2,
+  Plus // Icona Plus per aggiungere serie
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -84,14 +85,7 @@ ChartJS.register(
 );
 
 // --- CONFIGURAZIONE FIREBASE ---
-const firebaseConfig = {
-  apiKey: "AIzaSyCfTXY1foD8Dr9UxRNzLeOu680aNtIw4TA",
-  authDomain: "training-c0b76.firebaseapp.com",
-  projectId: "training-c0b76",
-  storageBucket: "training-c0b76.firebasestorage.app",
-  messagingSenderId: "149618028951",
-  appId: "1:149618028951:web:eca42664d47ab6d71954d2"
-};
+const firebaseConfig = JSON.parse(localStorage.getItem('firebase_config') || '{}');
 const safeConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
 
 const app = initializeApp(safeConfig);
@@ -100,88 +94,69 @@ const db = getFirestore(app);
 
 // ID App per la struttura del DB
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
-const APP_VERSION = "1.2.2"; // Bump versione manuale per visualizzazione
+const APP_VERSION = "1.2.3"; // Bump versione
 
 // --- DATI INIZIALI (Template Aggiornato) ---
 const INITIAL_WORKOUT_DAYS = {
 	'day_1': {
 		name: "Giorno 1: Petto e Tricipiti",
 		exercises: [
-			{ 
-                id: 'd1_e1', 
-                name: "Panca Piana - Bilanciere", 
-                sets: [{ reps: 12, weight: 40, completed: false },{ reps: 10, weight: 45, completed: false },{ reps: 10, weight: 50, completed: false },{ reps: 8, weight: 55, completed: false } ],
-                rest: "90s", 
-                imageUrl: './images/panca-piana.gif', 
-                notes: "Mantieni le spalle basse e concentratevi solo sulla contrazione del petto." 
-            },
-			{ 
-                id: 'd1_e2', 
-                name: "Panca 30° Multypower", 
-                sets: [
-                    { reps: 10, weight: 40, completed: false },
-                    { reps: 10, weight: 40, completed: false },
-                    { reps: 10, weight: 40, completed: false }
-                ], 
-                rest: "90s", 
-                imageUrl: './images/panca-multypower.gif', 
-                notes: "Movimento controllato, senti l'allungamento." 
-            },
-			{ id: 'd1_e3', name: "Croci al Cavo alto", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "60s", 
-			 	imageUrl: './images/Croci-ai-cavi-alti.gif', notes: "Contrazione di picco." },
-            { id: 'd1_e4', name: "Chest Press", sets: Array(3).fill({reps: 10, weight: 25, completed: false}), rest: "90s", 
-			 	imageUrl: './images/Chest-Press-Machine.gif', notes: "Spingi i gomiti in avanti." },
-            { id: 'd1_e5', name: "Pull Over", sets: Array(3).fill({reps: 12, weight: 20, completed: false}), rest: "90s", imageUrl: './images/pullover.gif', notes: "" },
-			{ id: 'd1_e6', name: "Spinte in Basso (Pushdown)", sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "90s", imageUrl: './images/pushdown.png', notes: "" },
-			{ id: 'd1_e7', name: "French Press (Manubri) panca 30°", multiplier: 2, sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "90s", imageUrl: './images/french-press.png', notes: "" },
-			{ id: 'd1_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
-			{ id: 'd1_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
+			{ id: 'd1_e1', name: "Panca Piana - Bilanciere", sets: [ { reps: 12, weight: 40, completed: false }, { reps: 10, weight: 45, completed: false }, { reps: 10, weight: 50, completed: false }, { reps: 8, weight: 55, completed: false } ], rest: "90s", imageUrl: '/images/panca-piana.gif', notes: "Mantieni le spalle basse e concentratevi solo sulla contrazione del petto." },
+			{ id: 'd1_e2', name: "Panca 30° Multypower", sets: [ { reps: 10, weight: 40, completed: false }, { reps: 10, weight: 40, completed: false }, { reps: 10, weight: 40, completed: false } ], rest: "90s", imageUrl: '/images/panca-multypower.gif', notes: "Movimento controllato, senti l'allungamento." },
+            { id: 'd1_e3', name: "Croci al Cavo alto", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "60s", imageUrl: '/images/Croci-ai-cavi-alti.gif', notes: "Contrazione di picco. (Peso per lato)" },
+            { id: 'd1_e4', name: "Chest Press", sets: Array(3).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/Chest-Press-Machine.gif', notes: "Spingi i gomiti in avanti." },
+            { id: 'd1_e5', name: "Pull Over", sets: Array(3).fill({reps: 12, weight: 20, completed: false}), rest: "90s", imageUrl: '/images/pullover.gif', notes: "" },
+            { id: 'd1_e6', name: "Spinte in Basso (Pushdown)", sets: Array(3).fill({reps: 12, weight: 15, completed: false}), rest: "60s", imageUrl: '/images/pushdown.png', notes: "" },
+            { id: 'd1_e7', name: "French Press (Manubri)", multiplier: 2, sets: Array(3).fill({reps: 12, weight: 12, completed: false}), rest: "90s", imageUrl: '/images/french-press.png', notes: "Due manubri." },
+            { id: 'd1_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 40, completed: false}), rest: "60s", imageUrl: '/images/hyperextension.gif', notes: "" },
+            { id: 'd1_e9', name: "Abdominal Crunch", sets: Array(4).fill({reps: 15, weight: 20, completed: false}), rest: "90s", imageUrl: '/images/ABS_CRUNCH_MC.gif', notes: "" },
 		]
 	},
 	'day_2': {
 		name: "Giorno 2: Gambe e Spalle",
 		exercises: [
-			{ id: 'd2_e1', name: "Calf Raises on leg press", sets: Array(4).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: './images/Calf-Press-on-Leg-Press-Machine.gif', notes: "" },
-            { id: 'd2_e2', name: "Leg Press", sets: Array(4).fill({reps: 10, weight: 70, completed: false}), rest: "90s", imageUrl: './images/leg-press.png', notes: "Non bloccare le ginocchia." },
-			{ id: 'd2_e3', name: "Leg Extension", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: './images/legext.png', notes: "Non bloccare le ginocchia." },
-			{ id: 'd2_e4', name: "Leg Curl Sdraiato", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: './images/leg-curl-sdraiato-bg.png', notes: "Non bloccare le ginocchia." },
-			{ id: 'd2_e5', name: "Lento avanti panca 70°", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 14, completed: false}), rest: "90s", imageUrl: './images/lento-manubri.gif', notes: "Non bloccare le ginocchia." },
-			{ id: 'd2_e6', name: "Alzate Laterali", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/alzate-laterali.png', notes: "Non bloccare le ginocchia." },
-			{ id: 'd2_e7', name: "Alzate posteriori su panca", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/inverso-manubri-panca-alta-bg.png', notes: "Non bloccare le ginocchia." },
-			{ id: 'd2_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
-			{ id: 'd2_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
+			{ id: 'd2_e1', name: "Calf Raises", sets: Array(4).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: '/images/Calf-Press-on-Leg-Press-Machine.gif', notes: "" },
+            { id: 'd2_e2', name: "Leg Press", sets: Array(4).fill({reps: 10, weight: 70, completed: false}), rest: "90s", imageUrl: '/images/leg-press.png', notes: "Non bloccare le ginocchia." },
+            { id: 'd2_e3', name: "Leg Extension", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/legext.png', notes: "Non bloccare le ginocchia." },
+            { id: 'd2_e4', name: "Leg Curl Sdraiato", sets: Array(4).fill({reps: 10, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/leg-curl-sdraiato-bg.png', notes: "Non bloccare le ginocchia." },
+            { id: 'd2_e5', name: "Lento Avanti", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 14, completed: false}), rest: "90s", imageUrl: '/images/lento-manubri.gif', notes: "Non bloccare le ginocchia." },
+            { id: 'd2_e6', name: "Alzate Laterali", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "60s", imageUrl: '/images/alzate-laterali.png', notes: "Non bloccare le ginocchia." },
+            { id: 'd2_e7', name: "Alzate Posteriori", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: '/images/inverso-manubri-panca-alta-bg.png', notes: "Non bloccare le ginocchia." },
+            { id: 'd2_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: '/images/hyperextension.gif', notes: "" },
+            { id: 'd2_e9', name: "Abdominal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/ABS_CRUNCH_MC.gif', notes: "" },
 		]
 	},
     'day_3': {
 		name: "Giorno 3: Schiena e Bicipiti",
 		exercises: [
-			{ id: 'd3_e1', name: "Rematore Manubri", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 18, completed: false}), rest: "90s", imageUrl: './images/rematore-manubrio.gif', notes: "Schiena dritta." },
-			{ id: 'd3_e2', name: "Lat Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: './images/lat-machine.png', notes: "Schiena dritta." },
-			{ id: 'd3_e3', name: "Pulley basso con Triangolo", sets: Array(4).fill({reps: 8, weight: 30, completed: false}), rest: "90s", imageUrl: './images/pulley-basso.png', notes: "Petto in fuori, schiena inarcata. Porta il triangolo all'ombelico." },
-			{ id: 'd3_e4', name: "Row Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: './images/Row-Machine.gif', notes: "Schiena dritta." },
-			{ id: 'd3_e5', name: "Curl seduto con Manubri", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/curl-manubri-seduto-bg.png', notes: "Schiena dritta." },
-			{ id: 'd3_e6', name: "Hammer curl in piedi", sets: Array(4).fill({reps: 10, weight: 15, completed: false}), rest: "90s", imageUrl: './images/hammer-curl.png', notes: "Schiena dritta." },
-			{ id: 'd3_e7', name: "Trazioni alla sbarra Chin Up", sets: Array(4).fill({reps: 10, weight: 48, completed: false}), rest: "90s", imageUrl: './images/chin-up.gif', notes: "Schiena dritta." },
-			{ id: 'd3_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
-			{ id: 'd3_e9', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
+			{ id: 'd3_e1', name: "Rematore Manubri", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 18, completed: false}), rest: "90s", imageUrl: '/images/rematore-manubrio.gif', notes: "Schiena dritta." },
+            { id: 'd3_e2', name: "Lat Machine", sets: Array(4).fill({reps: 10, weight: 50, completed: false}), rest: "90s", imageUrl: '/images/lat-machine.png', notes: "Schiena dritta." },
+            { id: 'd3_e3', name: "Pulley Basso", sets: Array(4).fill({reps: 8, weight: 30, completed: false}), rest: "90s", imageUrl: '/images/pulley-basso.png', notes: "Petto in fuori, schiena inarcata. Porta il triangolo all'ombelico." },
+            { id: 'd3_e4', name: "Row Machine", sets: Array(4).fill({reps: 8, weight: 50, completed: false}), rest: "90s", imageUrl: '/images/Row-Machine.gif', notes: "Schiena dritta." },
+            { id: 'd3_e5', name: "Curl Manubri", multiplier: 2, sets: Array(4).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: '/images/curl-manubri-seduto-bg.png', notes: "Schiena dritta." },
+            { id: 'd3_e6', name: "Hammer Curl", sets: Array(4).fill({reps: 10, weight: 15, completed: false}), rest: "90s", imageUrl: '/images/hammer-curl.png', notes: "Schiena dritta." },
+            { id: 'd3_e7', name: "Chin Up", sets: Array(4).fill({reps: 10, weight: 48, completed: false}), rest: "90s", imageUrl: '/images/chin-up.gif', notes: "Schiena dritta." },
+            { id: 'd3_e8', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: '/images/hyperextension.gif', notes: "" },
+            { id: 'd3_e9', name: "Abdominal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/ABS_CRUNCH_MC.gif', notes: "" },
 		]
 	},
     'day_4': {
 		name: "Giorno 4: Petto e Spalle (Richiamo)",
 		exercises: [
-			{ id: 'd4_e1', name: "Panca Piana Manubri", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: './images/Chest-Press-con-Manubri-gif.gif', notes: "" },
-			{ id: 'd4_e2', name: "Chest Press distensioni delle braccia", sets: Array(3).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: './images/chestpress.png', notes: "" },
-			{ id: 'd4_e3', name: "Panca Inclinata Manubri", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: './images/spinte-panca-alta-manubri.png', notes: "inclinata 30 gradi" },
-			{ id: 'd4_e4', name: "Alzate Laterali", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 12, completed: false}), rest: "90s", imageUrl: './images/alzate-laterali.png', notes: "" },
-			{ id: 'd4_e5', name: "Alzate Frontali", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/alzate-frontali.png', notes: "" },
-			{ id: 'd4_e6', name: "Alzate Posteriori su panca", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: './images/inverso-manubri-panca-alta-bg.png', notes: "" },
-			{ id: 'd4_e7', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: './images/hyperextension.gif', notes: "" },
-			{ id: 'd4_e8', name: "Abdoninal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: './images/ABS_CRUNCH_MC.gif', notes: "" }
+			{ id: 'd4_e1', name: "Panca Piana Manubri", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: '/images/Chest-Press-con-Manubri-gif.gif', notes: "" },
+			{ id: 'd4_e2', name: "Chest Press", sets: Array(3).fill({reps: 10, weight: 40, completed: false}), rest: "90s", imageUrl: '/images/chestpress.png', notes: "" },
+			{ id: 'd4_e3', name: "Panca Inclinata Manubri", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 16, completed: false}), rest: "90s", imageUrl: '/images/spinte-panca-alta-manubri.png', notes: "inclinata 30 gradi" },
+			{ id: 'd4_e4', name: "Alzate Laterali", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 12, completed: false}), rest: "60s", imageUrl: '/images/alzate-laterali.png', notes: "" },
+			{ id: 'd4_e5', name: "Alzate Frontali", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "60s", imageUrl: '/images/alzate-frontali.png', notes: "" },
+			{ id: 'd4_e6', name: "Alzate Posteriori", multiplier: 2, sets: Array(3).fill({reps: 10, weight: 10, completed: false}), rest: "90s", imageUrl: '/images/inverso-manubri-panca-alta-bg.png', notes: "" },
+			{ id: 'd4_e7', name: "Lombari Iperestensioni", sets: Array(3).fill({reps: 12, weight: 10, completed: false}), rest: "90s", imageUrl: '/images/hyperextension.gif', notes: "" },
+			{ id: 'd4_e8', name: "Abdominal Crunch", sets: Array(4).fill({reps: 15, weight: 25, completed: false}), rest: "90s", imageUrl: '/images/ABS_CRUNCH_MC.gif', notes: "" },
 		]
 	}
 };
+
 const getImageUrl = (url, name) => {
-    if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
+    if (url && (url.startsWith('http') || url.startsWith('/'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
 };
 
@@ -385,7 +360,6 @@ export default function App() {
   };
   
   const closeRestTimer = () => {
-      // Chiusura manuale, non avanzare
       setRestTimer({ isOpen: false, timeLeft: 0, totalTime: 0, activeExerciseIndex: null });
   };
   
@@ -407,6 +381,15 @@ export default function App() {
       }
   };
   const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
+
+  // --- FUNZIONI DI UTILITÀ PER LE DATE ---
+  const getWeekNumber = (date) => {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+      return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+  };
 
   // --- CARICAMENTO STORICO E GRAFICI ---
   const loadHistory = async (isInitial = false) => {
@@ -460,15 +443,13 @@ export default function App() {
           
           logs.forEach(log => {
               const logDate = new Date(log.date);
-              const d = new Date(Date.UTC(logDate.getFullYear(), logDate.getMonth(), logDate.getDate()));
-              const dayNum = d.getUTCDay() || 7;
-              d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-              const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-              const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+              const weekNum = getWeekNumber(logDate);
+              const year = logDate.getFullYear();
+              const key = `${year}-W${weekNum}`;
               
-              const key = `${logDate.getFullYear()}-W${weekNum}`;
-              
-              if (!weeklyAggregation[key]) weeklyAggregation[key] = 0;
+              if (!weeklyAggregation[key]) {
+                  weeklyAggregation[key] = 0;
+              }
               weeklyAggregation[key] += (log.totalTonnage || 0);
           });
 
@@ -559,8 +540,26 @@ export default function App() {
           }
       } else {
           const seconds = parseRestTime(exercise.rest);
-          openRestTimer(seconds, exerciseIndex); // Passa l'indice per auto-advance
+          openRestTimer(seconds, exerciseIndex); 
       }
+  };
+  
+  // NUOVA FUNZIONE: Aggiungi set dinamicamente
+  const handleAddSet = (exerciseIndex) => {
+      if (!activeSession) return;
+      
+      const updatedSession = { ...activeSession };
+      const exercise = updatedSession.exercises[exerciseIndex];
+      
+      // Clona l'ultima serie (o usa default se non esiste)
+      const lastSet = exercise.sets[exercise.sets.length - 1];
+      const newSet = lastSet ? { ...lastSet, completed: false } : { reps: 10, weight: 0, completed: false };
+      
+      exercise.sets.push(newSet);
+      
+      setActiveSession(updatedSession);
+      saveSessionLocally(updatedSession);
+      showToast("Serie aggiunta!", 'success');
   };
 
   const updateSetValues = (exerciseIndex, setIndex, field, value) => {
@@ -596,11 +595,10 @@ export default function App() {
       let sessionData = JSON.parse(JSON.stringify(dayTemplate));
       setLoading(true);
       
-      // Recupera ultimo tonnellaggio e Defaults
+      // Recupera ultimo tonnellaggio
       setLastSessionTonnage(0);
       if (user && user.uid !== 'mock-user') {
           try {
-              // 1. Cerca ultimo allenamento
               const q = query(
                   collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
                   orderBy("date", "desc"),
@@ -614,30 +612,29 @@ export default function App() {
               if (lastWorkout && lastWorkout.totalTonnage) {
                   setLastSessionTonnage(lastWorkout.totalTonnage);
               }
-
-              // 2. Carica Defaults
-              const userDefaults = await fetchUserDefaults(user.uid);
-              sessionData.exercises = sessionData.exercises.map(ex => {
-                  if (userDefaults[ex.id]) {
-                      const savedSetsData = userDefaults[ex.id];
-                      const mergedSets = ex.sets.map((set, idx) => {
-                          const savedSet = savedSetsData[idx];
-                          if (savedSet) {
-                              return { 
-                                  ...set, 
-                                  weight: savedSet.weight !== undefined ? savedSet.weight : set.weight, 
-                                  reps: savedSet.reps !== undefined ? savedSet.reps : set.reps 
-                              };
-                          }
-                          return set;
-                      });
-                      return { ...ex, sets: mergedSets };
-                  }
-                  return ex;
-              });
-          } catch(e) { console.error("Error fetching data:", e); }
-      }
+          } catch(e) { console.error("Error fetching last session:", e); }
       
+          // Carica Defaults
+          const userDefaults = await fetchUserDefaults(user.uid);
+          sessionData.exercises = sessionData.exercises.map(ex => {
+              if (userDefaults[ex.id]) {
+                  const savedSetsData = userDefaults[ex.id];
+                  const mergedSets = ex.sets.map((set, idx) => {
+                      const savedSet = savedSetsData[idx];
+                      if (savedSet) {
+                          return { 
+                              ...set, 
+                              weight: savedSet.weight !== undefined ? savedSet.weight : set.weight, 
+                              reps: savedSet.reps !== undefined ? savedSet.reps : set.reps 
+                          };
+                      }
+                      return set;
+                  });
+                  return { ...ex, sets: mergedSets };
+              }
+              return ex;
+          });
+      }
       setLoading(false);
       setActiveSession(sessionData);
       setStartTime(new Date());
@@ -741,25 +738,10 @@ export default function App() {
       return () => clearInterval(interval);
   }, [view, finishModalOpen]);
 
-  // Gestione Timer Riposo e Avanzamento Automatico
   useEffect(() => {
       let interval;
-      if (restTimer.isOpen && restTimer.timeLeft > 0) {
-          interval = setInterval(() => {
-              setRestTimer(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 }));
-          }, 1000);
-      } else if (restTimer.isOpen && restTimer.timeLeft <= 0) {
-          if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-          
-          setRestTimer(prev => ({ ...prev, isOpen: false }));
-          
-          // NUOVO: Avanzamento automatico a fine timer
-          if (restTimer.activeExerciseIndex !== null) {
-              scrollToExercise(restTimer.activeExerciseIndex); // Rimane sullo stesso se non è finito, o passa al prossimo se l'utente clicca next. 
-              // La logica originale era che alla fine del timer si torna alla scheda per fare la serie successiva.
-              // L'avanzamento esercizio avviene SOLO se era l'ULTIMA serie (già gestito in handleSetCompletion)
-          }
-      }
+      if (restTimer.isOpen && restTimer.timeLeft > 0) { interval = setInterval(() => { setRestTimer(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 })); }, 1000); }
+      else if (restTimer.isOpen && restTimer.timeLeft <= 0 && navigator.vibrate) { navigator.vibrate([200, 100, 200]); }
       return () => clearInterval(interval);
   }, [restTimer.isOpen, restTimer.timeLeft]);
 
@@ -975,10 +957,28 @@ export default function App() {
                                             <div className={`text-xs font-bold ${set.completed ? 'text-green-500' : 'text-gray-500'}`}>{setIdx + 1}</div>
                                             <div className="px-1">{view === 'active-workout' ? <input type="number" value={set.weight} disabled={set.completed} onChange={(e) => updateSetValues(exIndex, setIdx, 'weight', e.target.value)} className={`w-full bg-gray-950 border border-gray-700 rounded text-center text-white font-mono py-1 focus:border-blue-500 focus:outline-none ${set.completed ? 'opacity-50 cursor-not-allowed border-transparent bg-transparent' : ''}`} /> : <span className="text-sm font-mono text-white">{set.weight || '-'}</span>}</div>
                                             <div className="px-1">{view === 'active-workout' ? <input type="number" value={set.reps} disabled={set.completed} onChange={(e) => updateSetValues(exIndex, setIdx, 'reps', e.target.value)} className={`w-full bg-gray-950 border border-gray-700 rounded text-center text-white font-mono py-1 focus:border-blue-500 focus:outline-none ${set.completed ? 'opacity-50 cursor-not-allowed border-transparent bg-transparent' : ''}`} /> : <span className="text-sm font-mono text-white">{set.reps}</span>}</div>
-                                            {view === 'active-workout' && <div className="flex justify-center"><button onClick={() => handleSetCompletion(exIndex, setIdx)} disabled={set.completed}>{set.completed ? <CheckSquare className="w-5 h-5 text-green-500" /> : <Circle className="w-6 h-6 text-gray-400 hover:text-white" />}</button></div>}
+                                            {view === 'active-workout' && (
+                                                <div className="flex justify-center items-center gap-1">
+                                                    <button onClick={() => handleSetCompletion(exIndex, setIdx)} disabled={set.completed}>
+                                                        {set.completed ? <CheckSquare className="w-5 h-5 text-green-500" /> : <Circle className="w-6 h-6 text-gray-400 hover:text-white" />}
+                                                    </button>
+                                                </div>
+                                            )}
                                             <div className="flex justify-center"><div className={`w-2 h-2 rounded-full ${set.completed ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-700'}`}></div></div>
                                         </div>
                                     ))}
+                                    
+                                    {/* Tasto Aggiungi Serie (Solo in Active Workout) */}
+                                    {view === 'active-workout' && (
+                                        <div className="pt-2 flex justify-center">
+                                            <button 
+                                                onClick={() => handleAddSet(exIndex)}
+                                                className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-semibold border border-blue-900/50 px-3 py-1.5 rounded-full hover:bg-blue-900/20 transition-all"
+                                            >
+                                                <Plus className="w-3 h-3" /> Aggiungi Serie
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
