@@ -54,7 +54,7 @@ import {
   Maximize2,
   Trash2,
   Plus,
-  StickyNote // Nuova icona per le note
+  StickyNote
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -102,7 +102,7 @@ const db = getFirestore(app);
 
 // ID App per la struttura del DB
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
-const APP_VERSION = "1.2.4"; // Bump versione
+const APP_VERSION = "1.2.5"; // Bump versione
 
 // --- DATI INIZIALI (Template Aggiornato) ---
 const INITIAL_WORKOUT_DAYS = {
@@ -262,13 +262,13 @@ export default function App() {
   const [activeSession, setActiveSession] = useState(null);
   const [sessionTimer, setSessionTimer] = useState(0);
   const [startTime, setStartTime] = useState(null);
-  const [lastSessionTonnage, setLastSessionTonnage] = useState(0); 
+  const [maxSessionTonnage, setMaxSessionTonnage] = useState(0); // NUOVO: Max Volume
   
   // UI States
   const [restTimer, setRestTimer] = useState({ isOpen: false, timeLeft: 0, totalTime: 0, activeExerciseIndex: null }); 
   const [finishModalOpen, setFinishModalOpen] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null); 
-  const [noteModal, setNoteModal] = useState({ isOpen: false, exerciseIndex: null, text: '' }); // NUOVO: Stato Modale Nota
+  const [noteModal, setNoteModal] = useState({ isOpen: false, exerciseIndex: null, text: '' }); 
   const [rating, setRating] = useState(0);
   const scrollContainerRef = useRef(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -439,7 +439,6 @@ export default function App() {
           const querySnapshot = await getDocs(q);
           const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-          // FIX ORDINAMENTO: Data + Ora
           logs.sort((a, b) => {
               const dateA = new Date(`${a.date}T${a.startTime}`);
               const dateB = new Date(`${b.date}T${b.startTime}`);
@@ -562,18 +561,22 @@ export default function App() {
       if (isLastSetOfExercise) {
           showToast(`Esercizio completato!`, 'success');
           const isLastExercise = exerciseIndex === activeSession.exercises.length - 1;
+          
           if (isLastExercise) {
-              setTimeout(() => setFinishModalOpen(true), 500);
+              // Se è l'ultimo esercizio, NON aprire il modale finale automaticamente, ma neanche il timer.
+              // L'utente salverà manualmente col tasto in basso.
+              showToast("Allenamento terminato. Clicca Salva per finire.", 'info');
           } else {
+              // Avanzamento automatico al prossimo esercizio dopo breve pausa
               setTimeout(() => scrollToExercise(exerciseIndex + 1), 1200);
           }
       } else {
+          // Timer riposo per serie intermedie
           const seconds = parseRestTime(exercise.rest);
           openRestTimer(seconds, exerciseIndex); 
       }
   };
   
-  // NUOVA FUNZIONE: Aggiungi set dinamicamente
   const handleAddSet = (exerciseIndex) => {
       if (!activeSession) return;
       
@@ -590,7 +593,6 @@ export default function App() {
       showToast("Serie aggiunta!", 'success');
   };
 
-  // NUOVA FUNZIONE: Aggiungi/Modifica nota
   const handleNoteEdit = (exerciseIndex) => {
       if (!activeSession) return;
       const note = activeSession.exercises[exerciseIndex].notes || "";
@@ -642,24 +644,28 @@ export default function App() {
       let sessionData = JSON.parse(JSON.stringify(dayTemplate));
       setLoading(true);
       
-      // Recupera ultimo tonnellaggio
-      setLastSessionTonnage(0);
+      // Recupera MAX tonnellaggio (invece che ultimo)
+      setMaxSessionTonnage(0);
       if (user && user.uid !== 'mock-user') {
           try {
+              // Query ampia per calcolare il max lato client
               const q = query(
                   collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
                   orderBy("date", "desc"),
-                  limit(50) 
+                  limit(100) 
               );
               const snapshot = await getDocs(q);
-              const lastWorkout = snapshot.docs
+              
+              const relevantWorkouts = snapshot.docs
                   .map(d => d.data())
-                  .find(w => w.dayName === dayTemplate.name);
-                  
-              if (lastWorkout && lastWorkout.totalTonnage) {
-                  setLastSessionTonnage(lastWorkout.totalTonnage);
+                  .filter(w => w.dayName === dayTemplate.name);
+              
+              if (relevantWorkouts.length > 0) {
+                  // Calcola il massimo
+                  const maxVol = Math.max(...relevantWorkouts.map(w => w.totalTonnage || 0));
+                  setMaxSessionTonnage(maxVol);
               }
-          } catch(e) { console.error("Error fetching last session:", e); }
+          } catch(e) { console.error("Error fetching max session:", e); }
       
           // Carica Defaults
           const userDefaults = await fetchUserDefaults(user.uid);
@@ -785,13 +791,6 @@ export default function App() {
       return () => clearInterval(interval);
   }, [view, finishModalOpen]);
 
-  useEffect(() => {
-      let interval;
-      if (restTimer.isOpen && restTimer.timeLeft > 0) { interval = setInterval(() => { setRestTimer(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 })); }, 1000); }
-      else if (restTimer.isOpen && restTimer.timeLeft <= 0 && navigator.vibrate) { navigator.vibrate([200, 100, 200]); }
-      return () => clearInterval(interval);
-  }, [restTimer.isOpen, restTimer.timeLeft]);
-
   // Gestione Timer Riposo e Avanzamento Automatico
   useEffect(() => {
       let interval;
@@ -804,8 +803,12 @@ export default function App() {
           
           setRestTimer(prev => ({ ...prev, isOpen: false }));
           
+          // Avanzamento automatico a fine timer
           if (restTimer.activeExerciseIndex !== null) {
-              scrollToExercise(restTimer.activeExerciseIndex); 
+              // Se il timer finisce, passiamo al prossimo esercizio se necessario?
+              // In realtà il timer serve per il riposo TRA serie. 
+              // Quando finisce, semplicemente chiudiamo il modale e l'utente è pronto per la prossima serie.
+              // L'avanzamento "di esercizio" avviene solo alla fine dell'ULTIMA serie (gestito in handleSetCompletion)
           }
       }
       return () => clearInterval(interval);
@@ -881,9 +884,9 @@ export default function App() {
                         </div>
                         <div className="flex gap-2 text-xs font-mono">
                              <span className="text-green-400">Vol: {calculateCompletedVolume(activeSession)} kg</span>
-                             {lastSessionTonnage > 0 && (
+                             {maxSessionTonnage > 0 && (
                                 <span className="text-gray-500 border-l border-gray-700 pl-2">
-                                   Last: {lastSessionTonnage} kg
+                                   Max: {maxSessionTonnage} kg
                                 </span>
                              )}
                         </div>
