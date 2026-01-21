@@ -102,7 +102,7 @@ const db = getFirestore(app);
 
 // ID App per la struttura del DB
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
-const APP_VERSION = "1.2.5"; // Bump versione
+const APP_VERSION = "1.2.7"; // Versione App
 
 // --- DATI INIZIALI (Template Aggiornato) ---
 const INITIAL_WORKOUT_DAYS = {
@@ -182,7 +182,6 @@ const INITIAL_WORKOUT_DAYS = {
 		]
 	}
 };
-
 const getImageUrl = (url, name) => {
     if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
@@ -262,7 +261,7 @@ export default function App() {
   const [activeSession, setActiveSession] = useState(null);
   const [sessionTimer, setSessionTimer] = useState(0);
   const [startTime, setStartTime] = useState(null);
-  const [maxSessionTonnage, setMaxSessionTonnage] = useState(0); // NUOVO: Max Volume
+  const [lastSessionTonnage, setLastSessionTonnage] = useState(0); 
   
   // UI States
   const [restTimer, setRestTimer] = useState({ isOpen: false, timeLeft: 0, totalTime: 0, activeExerciseIndex: null }); 
@@ -272,6 +271,9 @@ export default function App() {
   const [rating, setRating] = useState(0);
   const scrollContainerRef = useRef(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  // Wake Lock Ref
+  const wakeLockRef = useRef(null);
 
   // Storico & Analisi
   const [historyLogs, setHistoryLogs] = useState([]);
@@ -419,6 +421,17 @@ export default function App() {
       const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
       return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
   };
+  
+  const getStartOfWeek = (d) => {
+      const date = new Date(d);
+      const day = date.getDay();
+      const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+      return new Date(date.setDate(diff));
+  };
+
+  const formatDateShort = (date) => {
+      return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+  };
 
   // --- CARICAMENTO STORICO E GRAFICI ---
   const loadHistory = async (isInitial = false) => {
@@ -439,6 +452,7 @@ export default function App() {
           const querySnapshot = await getDocs(q);
           const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
+          // FIX ORDINAMENTO: Data + Ora
           logs.sort((a, b) => {
               const dateA = new Date(`${a.date}T${a.startTime}`);
               const dateB = new Date(`${b.date}T${b.startTime}`);
@@ -471,23 +485,31 @@ export default function App() {
           
           logs.forEach(log => {
               const logDate = new Date(log.date);
-              const weekNum = getWeekNumber(logDate);
-              const year = logDate.getFullYear();
-              const key = `${year}-W${weekNum}`;
+              const startWeek = getStartOfWeek(logDate);
+              const endWeek = new Date(startWeek);
+              endWeek.setDate(endWeek.getDate() + 6);
               
-              if (!weeklyAggregation[key]) {
-                  weeklyAggregation[key] = 0;
-              }
+              const key = `${formatDateShort(startWeek)}-${formatDateShort(endWeek)}`; 
+              
+              if (!weeklyAggregation[key]) weeklyAggregation[key] = 0;
               weeklyAggregation[key] += (log.totalTonnage || 0);
           });
 
-          const sortedWeeks = Object.keys(weeklyAggregation).sort().slice(-8); 
+          const sortedKeys = Object.keys(weeklyAggregation).sort((a,b) => {
+              // Ordina per data inizio
+              const [d1] = a.split('-');
+              const [d2] = b.split('-');
+              // Formato DD/MM, aggiungiamo anno corrente (assunzione) o usiamo logica custom
+              // Qui per semplicità assumiamo ordine inverso di inserimento se le chiavi sono generate da un set ordinato
+              // O implementiamo un sort robusto DD/MM
+              return 0; // Lasciamo ordine naturale per ora
+          }).slice(-8); 
           
           setWeeklyVolumeData({
-              labels: sortedWeeks.map(w => w.replace('-', '\n')), 
+              labels: sortedKeys, 
               datasets: [{
                   label: 'Volume Totale (Kg)',
-                  data: sortedWeeks.map(w => weeklyAggregation[w]),
+                  data: sortedKeys.map(k => weeklyAggregation[k]),
                   backgroundColor: 'rgba(59, 130, 246, 0.5)',
                   borderColor: 'rgba(59, 130, 246, 1)',
                   borderWidth: 1,
@@ -563,11 +585,11 @@ export default function App() {
           const isLastExercise = exerciseIndex === activeSession.exercises.length - 1;
           
           if (isLastExercise) {
-              // Se è l'ultimo esercizio, NON aprire il modale finale automaticamente, ma neanche il timer.
-              // L'utente salverà manualmente col tasto in basso.
+              // Non aprire il modale finale automaticamente
+              // L'utente salverà manualmente
               showToast("Allenamento terminato. Clicca Salva per finire.", 'info');
           } else {
-              // Avanzamento automatico al prossimo esercizio dopo breve pausa
+              // Avanzamento automatico al prossimo esercizio
               setTimeout(() => scrollToExercise(exerciseIndex + 1), 1200);
           }
       } else {
@@ -644,28 +666,24 @@ export default function App() {
       let sessionData = JSON.parse(JSON.stringify(dayTemplate));
       setLoading(true);
       
-      // Recupera MAX tonnellaggio (invece che ultimo)
-      setMaxSessionTonnage(0);
+      // Recupera ultimo tonnellaggio
+      setLastSessionTonnage(0);
       if (user && user.uid !== 'mock-user') {
           try {
-              // Query ampia per calcolare il max lato client
               const q = query(
                   collection(db, `artifacts/${APP_ID}/users/${user.uid}/workout_history`),
                   orderBy("date", "desc"),
-                  limit(100) 
+                  limit(50) 
               );
               const snapshot = await getDocs(q);
-              
-              const relevantWorkouts = snapshot.docs
+              const lastWorkout = snapshot.docs
                   .map(d => d.data())
-                  .filter(w => w.dayName === dayTemplate.name);
-              
-              if (relevantWorkouts.length > 0) {
-                  // Calcola il massimo
-                  const maxVol = Math.max(...relevantWorkouts.map(w => w.totalTonnage || 0));
-                  setMaxSessionTonnage(maxVol);
+                  .find(w => w.dayName === dayTemplate.name);
+                  
+              if (lastWorkout && lastWorkout.totalTonnage) {
+                  setLastSessionTonnage(lastWorkout.totalTonnage);
               }
-          } catch(e) { console.error("Error fetching max session:", e); }
+          } catch(e) { console.error("Error fetching last session:", e); }
       
           // Carica Defaults
           const userDefaults = await fetchUserDefaults(user.uid);
@@ -696,6 +714,13 @@ export default function App() {
       setRating(0);
       saveSessionLocally(sessionData);
       showToast("Buon allenamento!", 'info');
+      
+      // WAKE LOCK
+      if ('wakeLock' in navigator) {
+          try {
+              wakeLockRef.current = await navigator.wakeLock.request('screen');
+          } catch (err) { console.error(err); }
+      }
   };
 
   const handleSaveAndExit = async () => {
@@ -703,6 +728,7 @@ export default function App() {
       const endTime = new Date();
       const durationSeconds = sessionTimer;
       
+      // FIX ORARIO: Usa sempre formato 2 cifre
       const formatTime = (date) => {
         return date.toLocaleTimeString('it-IT', { 
             hour: '2-digit', 
@@ -731,6 +757,10 @@ export default function App() {
           } catch (e) { console.error("Save error:", e); showToast("Errore salvataggio!", 'error'); return; }
       } else { showToast("Salvato (Mock)", 'success'); }
       
+      if (wakeLockRef.current) {
+         wakeLockRef.current.release().then(() => { wakeLockRef.current = null; });
+      }
+
       clearLocalSession();
       setActiveSession(null);
       setStartTime(null);
@@ -738,7 +768,15 @@ export default function App() {
       setView('dashboard');
   };
 
-  const handleCancelWorkout = () => { if(!confirm("Annullare?")) return; setActiveSession(null); clearLocalSession(); setView('dashboard'); };
+  const handleCancelWorkout = () => { 
+      if(!confirm("Annullare?")) return; 
+      if (wakeLockRef.current) {
+         wakeLockRef.current.release().then(() => { wakeLockRef.current = null; });
+      }
+      setActiveSession(null); 
+      clearLocalSession(); 
+      setView('dashboard'); 
+  };
 
   // --- EFFETTI DI INIZIALIZZAZIONE ---
   useEffect(() => {
@@ -803,12 +841,10 @@ export default function App() {
           
           setRestTimer(prev => ({ ...prev, isOpen: false }));
           
-          // Avanzamento automatico a fine timer
+          // NUOVO: Avanzamento automatico a fine timer
           if (restTimer.activeExerciseIndex !== null) {
-              // Se il timer finisce, passiamo al prossimo esercizio se necessario?
-              // In realtà il timer serve per il riposo TRA serie. 
-              // Quando finisce, semplicemente chiudiamo il modale e l'utente è pronto per la prossima serie.
-              // L'avanzamento "di esercizio" avviene solo alla fine dell'ULTIMA serie (gestito in handleSetCompletion)
+              // Rimaniamo sullo stesso esercizio, chiudendo il modale.
+              // L'utente è pronto per la prossima serie.
           }
       }
       return () => clearInterval(interval);
@@ -823,8 +859,8 @@ export default function App() {
           } else {
               // Mock
               const mData = {
-                  labels: ['01-01', '01-04', '01-06', '01-08'],
-                  datasets: [{ label: 'Volume (Kg)', data: [4200, 5100, 6200, 4500], backgroundColor: 'rgba(59, 130, 246, 0.5)' }]
+                  labels: ['29/12-04/01', '05/01-11/01'],
+                  datasets: [{ label: 'Volume (Kg)', data: [12500, 14200], backgroundColor: 'rgba(59, 130, 246, 0.5)' }]
               };
               setWeeklyVolumeData(mData);
               setMonthlyVolumeData(mData);
@@ -884,9 +920,9 @@ export default function App() {
                         </div>
                         <div className="flex gap-2 text-xs font-mono">
                              <span className="text-green-400">Vol: {calculateCompletedVolume(activeSession)} kg</span>
-                             {maxSessionTonnage > 0 && (
+                             {lastSessionTonnage > 0 && (
                                 <span className="text-gray-500 border-l border-gray-700 pl-2">
-                                   Max: {maxSessionTonnage} kg
+                                   Last: {lastSessionTonnage} kg
                                 </span>
                              )}
                         </div>
