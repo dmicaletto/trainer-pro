@@ -53,7 +53,8 @@ import {
   Edit2,
   Maximize2,
   Trash2,
-  Plus // Icona Plus per aggiungere serie
+  Plus,
+  StickyNote // Nuova icona per le note
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -85,7 +86,6 @@ ChartJS.register(
 );
 
 // --- CONFIGURAZIONE FIREBASE ---
-// --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyCfTXY1foD8Dr9UxRNzLeOu680aNtIw4TA",
   authDomain: "training-c0b76.firebaseapp.com",
@@ -102,8 +102,9 @@ const db = getFirestore(app);
 
 // ID App per la struttura del DB
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
-const APP_VERSION = "1.2.3"; // Bump versione
+const APP_VERSION = "1.2.4"; // Bump versione
 
+// --- DATI INIZIALI (Template Aggiornato) ---
 const INITIAL_WORKOUT_DAYS = {
 	'day_1': {
 		name: "Giorno 1: Petto e Tricipiti",
@@ -267,6 +268,7 @@ export default function App() {
   const [restTimer, setRestTimer] = useState({ isOpen: false, timeLeft: 0, totalTime: 0, activeExerciseIndex: null }); 
   const [finishModalOpen, setFinishModalOpen] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null); 
+  const [noteModal, setNoteModal] = useState({ isOpen: false, exerciseIndex: null, text: '' }); // NUOVO: Stato Modale Nota
   const [rating, setRating] = useState(0);
   const scrollContainerRef = useRef(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -578,7 +580,6 @@ export default function App() {
       const updatedSession = { ...activeSession };
       const exercise = updatedSession.exercises[exerciseIndex];
       
-      // Clona l'ultima serie (o usa default se non esiste)
       const lastSet = exercise.sets[exercise.sets.length - 1];
       const newSet = lastSet ? { ...lastSet, completed: false } : { reps: 10, weight: 0, completed: false };
       
@@ -587,6 +588,25 @@ export default function App() {
       setActiveSession(updatedSession);
       saveSessionLocally(updatedSession);
       showToast("Serie aggiunta!", 'success');
+  };
+
+  // NUOVA FUNZIONE: Aggiungi/Modifica nota
+  const handleNoteEdit = (exerciseIndex) => {
+      if (!activeSession) return;
+      const note = activeSession.exercises[exerciseIndex].notes || "";
+      setNoteModal({ isOpen: true, exerciseIndex, text: note });
+  };
+  
+  const saveNote = () => {
+      if (noteModal.exerciseIndex === null) return;
+      
+      const updatedSession = { ...activeSession };
+      updatedSession.exercises[noteModal.exerciseIndex].notes = noteModal.text;
+      
+      setActiveSession(updatedSession);
+      saveSessionLocally(updatedSession);
+      setNoteModal({ isOpen: false, exerciseIndex: null, text: '' });
+      showToast("Nota salvata!", 'success');
   };
 
   const updateSetValues = (exerciseIndex, setIndex, field, value) => {
@@ -772,6 +792,25 @@ export default function App() {
       return () => clearInterval(interval);
   }, [restTimer.isOpen, restTimer.timeLeft]);
 
+  // Gestione Timer Riposo e Avanzamento Automatico
+  useEffect(() => {
+      let interval;
+      if (restTimer.isOpen && restTimer.timeLeft > 0) {
+          interval = setInterval(() => {
+              setRestTimer(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 }));
+          }, 1000);
+      } else if (restTimer.isOpen && restTimer.timeLeft <= 0) {
+          if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+          
+          setRestTimer(prev => ({ ...prev, isOpen: false }));
+          
+          if (restTimer.activeExerciseIndex !== null) {
+              scrollToExercise(restTimer.activeExerciseIndex); 
+          }
+      }
+      return () => clearInterval(interval);
+  }, [restTimer.isOpen, restTimer.timeLeft]);
+
   // Gestione caricamento dati Storico/Grafici al cambio view
   useEffect(() => {
       if (view === 'history') {
@@ -899,6 +938,23 @@ export default function App() {
           </div>
       )}
 
+      {/* MODALE NOTA */}
+      {noteModal.isOpen && (
+          <div className="fixed inset-0 z-[70] bg-black/95 flex flex-col items-center justify-center p-6 animate-in fade-in">
+              <div className="w-full max-w-md bg-gray-900 rounded-2xl border border-gray-800 p-6 shadow-2xl relative">
+                  <button onClick={() => setNoteModal({ isOpen: false, exerciseIndex: null, text: '' })} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><StickyNote className="w-5 h-5 text-yellow-500" /> Nota Esercizio</h3>
+                  <textarea 
+                      value={noteModal.text} 
+                      onChange={(e) => setNoteModal(prev => ({ ...prev, text: e.target.value }))}
+                      className="w-full h-32 bg-gray-950 border border-gray-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none mb-4 resize-none"
+                      placeholder="Scrivi qui la tua nota..."
+                  />
+                  <button onClick={saveNote} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg">Salva Nota</button>
+              </div>
+          </div>
+      )}
+
       {/* FULL SCREEN IMAGE MODAL */}
       {fullScreenImage && (
           <div className="fixed inset-0 z-[80] bg-black/95 flex flex-col items-center justify-center p-2 animate-in fade-in duration-200" onClick={() => setFullScreenImage(null)}>
@@ -984,25 +1040,25 @@ export default function App() {
                                             <div className={`text-xs font-bold ${set.completed ? 'text-green-500' : 'text-gray-500'}`}>{setIdx + 1}</div>
                                             <div className="px-1">{view === 'active-workout' ? <input type="number" value={set.weight} disabled={set.completed} onChange={(e) => updateSetValues(exIndex, setIdx, 'weight', e.target.value)} className={`w-full bg-gray-950 border border-gray-700 rounded text-center text-white font-mono py-1 focus:border-blue-500 focus:outline-none ${set.completed ? 'opacity-50 cursor-not-allowed border-transparent bg-transparent' : ''}`} /> : <span className="text-sm font-mono text-white">{set.weight || '-'}</span>}</div>
                                             <div className="px-1">{view === 'active-workout' ? <input type="number" value={set.reps} disabled={set.completed} onChange={(e) => updateSetValues(exIndex, setIdx, 'reps', e.target.value)} className={`w-full bg-gray-950 border border-gray-700 rounded text-center text-white font-mono py-1 focus:border-blue-500 focus:outline-none ${set.completed ? 'opacity-50 cursor-not-allowed border-transparent bg-transparent' : ''}`} /> : <span className="text-sm font-mono text-white">{set.reps}</span>}</div>
-                                            {view === 'active-workout' && (
-                                                <div className="flex justify-center items-center gap-1">
-                                                    <button onClick={() => handleSetCompletion(exIndex, setIdx)} disabled={set.completed}>
-                                                        {set.completed ? <CheckSquare className="w-5 h-5 text-green-500" /> : <Circle className="w-6 h-6 text-gray-400 hover:text-white" />}
-                                                    </button>
-                                                </div>
-                                            )}
+                                            {view === 'active-workout' && <div className="flex justify-center"><button onClick={() => handleSetCompletion(exIndex, setIdx)} disabled={set.completed}>{set.completed ? <CheckSquare className="w-5 h-5 text-green-500" /> : <Circle className="w-6 h-6 text-gray-400 hover:text-white" />}</button></div>}
                                             <div className="flex justify-center"><div className={`w-2 h-2 rounded-full ${set.completed ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-700'}`}></div></div>
                                         </div>
                                     ))}
                                     
-                                    {/* Tasto Aggiungi Serie (Solo in Active Workout) */}
+                                    {/* Action Buttons: Add Set & Edit Note */}
                                     {view === 'active-workout' && (
-                                        <div className="pt-2 flex justify-center">
+                                        <div className="pt-2 flex justify-center gap-4">
                                             <button 
                                                 onClick={() => handleAddSet(exIndex)}
                                                 className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-semibold border border-blue-900/50 px-3 py-1.5 rounded-full hover:bg-blue-900/20 transition-all"
                                             >
                                                 <Plus className="w-3 h-3" /> Aggiungi Serie
+                                            </button>
+                                            <button 
+                                                onClick={() => handleNoteEdit(exIndex)}
+                                                className={`flex items-center gap-1 text-xs font-semibold border px-3 py-1.5 rounded-full transition-all ${exercise.notes ? 'text-yellow-400 border-yellow-900/50 bg-yellow-900/10' : 'text-gray-400 border-gray-700 hover:text-gray-300 hover:bg-gray-800'}`}
+                                            >
+                                                <StickyNote className={`w-3 h-3 ${exercise.notes ? 'fill-yellow-400' : ''}`} /> {exercise.notes ? 'Vedi Nota' : 'Aggiungi Nota'}
                                             </button>
                                         </div>
                                     )}
