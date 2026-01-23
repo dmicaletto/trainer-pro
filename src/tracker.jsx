@@ -93,7 +93,7 @@ const firebaseConfig = {
   storageBucket: "training-c0b76.firebasestorage.app",
   messagingSenderId: "149618028951",
   appId: "1:149618028951:web:eca42664d47ab6d71954d2"
-};
+};);
 const safeConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
 
 const app = initializeApp(safeConfig);
@@ -102,7 +102,7 @@ const db = getFirestore(app);
 
 // ID App per la struttura del DB
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76'; 
-const APP_VERSION = "1.2.7"; // Versione App
+const APP_VERSION = "1.2.8"; 
 
 // --- DATI INIZIALI (Template Aggiornato) ---
 const INITIAL_WORKOUT_DAYS = {
@@ -182,6 +182,7 @@ const INITIAL_WORKOUT_DAYS = {
 		]
 	}
 };
+
 const getImageUrl = (url, name) => {
     if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
@@ -199,7 +200,6 @@ const formatDuration = (seconds) => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
-// --- HELPER DI SANITIZZAZIONE ---
 const sanitizeData = (data) => {
     if (data === undefined) return null;
     if (data === null || typeof data !== 'object') return data;
@@ -245,13 +245,11 @@ const chartOptions = {
 };
 
 export default function App() {
-  // --- STATO ---
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null); 
   const [isEditingProfile, setIsEditingProfile] = useState(false); 
   const [loading, setLoading] = useState(true);
   
-  // Navigazione
   const [activeDayId, setActiveDayId] = useState('day_1');
   const [view, setView] = useState('dashboard');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -261,7 +259,7 @@ export default function App() {
   const [activeSession, setActiveSession] = useState(null);
   const [sessionTimer, setSessionTimer] = useState(0);
   const [startTime, setStartTime] = useState(null);
-  const [lastSessionTonnage, setLastSessionTonnage] = useState(0); 
+  const [maxSessionTonnage, setMaxSessionTonnage] = useState(0); 
   
   // UI States
   const [restTimer, setRestTimer] = useState({ isOpen: false, timeLeft: 0, totalTime: 0, activeExerciseIndex: null }); 
@@ -413,20 +411,20 @@ export default function App() {
   };
   const clearLocalSession = () => { if (user) localStorage.removeItem(`active_session_${user.uid}`); };
 
-  // --- FUNZIONI DI UTILITÀ PER LE DATE ---
-  const getWeekNumber = (date) => {
-      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-      const dayNum = d.getUTCDay() || 7;
-      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-      const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-      return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
-  };
-  
-  const getStartOfWeek = (d) => {
-      const date = new Date(d);
-      const day = date.getDay();
-      const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-      return new Date(date.setDate(diff));
+  // --- FUNZIONI DI UTILITÀ PER LE DATE (CORRETTE PER SETTIMANA ISO) ---
+  const getWeekStartEnd = (date) => {
+      const d = new Date(date);
+      const day = d.getDay();
+      // Lunedì è il giorno 1. Se è domenica (0), torna indietro di 6 giorni. Altrimenti torna indietro di (day - 1).
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1); 
+      
+      const monday = new Date(d);
+      monday.setDate(diff);
+      
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      
+      return { monday, sunday };
   };
 
   const formatDateShort = (date) => {
@@ -481,41 +479,40 @@ export default function App() {
           const querySnapshot = await getDocs(q);
           const logs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           
+          // AGGREGAZIONE SETTIMANALE (Lun-Dom)
           const weeklyAggregation = {};
           
           logs.forEach(log => {
               const logDate = new Date(log.date);
-              const startWeek = getStartOfWeek(logDate);
-              const endWeek = new Date(startWeek);
-              endWeek.setDate(endWeek.getDate() + 6);
+              const { monday, sunday } = getWeekStartEnd(logDate);
               
-              const key = `${formatDateShort(startWeek)}-${formatDateShort(endWeek)}`; 
+              // Chiave univoca per ordinamento: YYYY-MM-DD del Lunedì
+              // Etichetta visualizzata: DD/MM-DD/MM
+              const sortKey = monday.toISOString().split('T')[0]; 
+              const label = `${formatDateShort(monday)}-${formatDateShort(sunday)}`;
               
-              if (!weeklyAggregation[key]) weeklyAggregation[key] = 0;
-              weeklyAggregation[key] += (log.totalTonnage || 0);
+              if (!weeklyAggregation[sortKey]) {
+                  weeklyAggregation[sortKey] = { label, value: 0 };
+              }
+              weeklyAggregation[sortKey].value += (log.totalTonnage || 0);
           });
 
-          const sortedKeys = Object.keys(weeklyAggregation).sort((a,b) => {
-              // Ordina per data inizio
-              const [d1] = a.split('-');
-              const [d2] = b.split('-');
-              // Formato DD/MM, aggiungiamo anno corrente (assunzione) o usiamo logica custom
-              // Qui per semplicità assumiamo ordine inverso di inserimento se le chiavi sono generate da un set ordinato
-              // O implementiamo un sort robusto DD/MM
-              return 0; // Lasciamo ordine naturale per ora
-          }).slice(-8); 
-          
+          // Ordina per chiave data (dal più vecchio al più recente) e prendi gli ultimi 8
+          const sortedKeys = Object.keys(weeklyAggregation).sort(); 
+          const last8Weeks = sortedKeys.slice(-8);
+
           setWeeklyVolumeData({
-              labels: sortedKeys, 
+              labels: last8Weeks.map(k => weeklyAggregation[k].label), 
               datasets: [{
                   label: 'Volume Totale (Kg)',
-                  data: sortedKeys.map(k => weeklyAggregation[k]),
+                  data: last8Weeks.map(k => weeklyAggregation[k].value),
                   backgroundColor: 'rgba(59, 130, 246, 0.5)',
                   borderColor: 'rgba(59, 130, 246, 1)',
                   borderWidth: 1,
               }]
           });
           
+          // Chart Mensile
           const monthlyAggregation = {};
           logs.forEach(log => {
              const d = new Date(log.date);
@@ -583,17 +580,12 @@ export default function App() {
       if (isLastSetOfExercise) {
           showToast(`Esercizio completato!`, 'success');
           const isLastExercise = exerciseIndex === activeSession.exercises.length - 1;
-          
           if (isLastExercise) {
-              // Non aprire il modale finale automaticamente
-              // L'utente salverà manualmente
-              showToast("Allenamento terminato. Clicca Salva per finire.", 'info');
+              setTimeout(() => setFinishModalOpen(true), 500);
           } else {
-              // Avanzamento automatico al prossimo esercizio
               setTimeout(() => scrollToExercise(exerciseIndex + 1), 1200);
           }
       } else {
-          // Timer riposo per serie intermedie
           const seconds = parseRestTime(exercise.rest);
           openRestTimer(seconds, exerciseIndex); 
       }
@@ -666,8 +658,8 @@ export default function App() {
       let sessionData = JSON.parse(JSON.stringify(dayTemplate));
       setLoading(true);
       
-      // Recupera ultimo tonnellaggio
-      setLastSessionTonnage(0);
+      // Recupera MAX tonnellaggio
+      setMaxSessionTonnage(0);
       if (user && user.uid !== 'mock-user') {
           try {
               const q = query(
@@ -676,14 +668,16 @@ export default function App() {
                   limit(50) 
               );
               const snapshot = await getDocs(q);
-              const lastWorkout = snapshot.docs
+              
+              const relevantWorkouts = snapshot.docs
                   .map(d => d.data())
-                  .find(w => w.dayName === dayTemplate.name);
+                  .filter(w => w.dayName === dayTemplate.name);
                   
-              if (lastWorkout && lastWorkout.totalTonnage) {
-                  setLastSessionTonnage(lastWorkout.totalTonnage);
+              if (relevantWorkouts.length > 0) {
+                  const maxVol = Math.max(...relevantWorkouts.map(w => w.totalTonnage || 0));
+                  setMaxSessionTonnage(maxVol);
               }
-          } catch(e) { console.error("Error fetching last session:", e); }
+          } catch(e) { console.error("Error fetching max session:", e); }
       
           // Carica Defaults
           const userDefaults = await fetchUserDefaults(user.uid);
@@ -726,9 +720,12 @@ export default function App() {
   const handleSaveAndExit = async () => {
       const totalTonnage = calculateCompletedVolume(activeSession);
       const endTime = new Date();
-      const durationSeconds = sessionTimer;
       
-      // FIX ORARIO: Usa sempre formato 2 cifre
+      // FIX TIMER: Calcolo reale (Differenza tra ora e start)
+      // Se startTime è una stringa (recuperata da localStorage), converti in Date
+      const startDt = new Date(startTime); 
+      const durationSeconds = Math.floor((endTime - startDt) / 1000);
+      
       const formatTime = (date) => {
         return date.toLocaleTimeString('it-IT', { 
             hour: '2-digit', 
@@ -739,11 +736,11 @@ export default function App() {
       };
 
       const workoutLog = {
-          date: startTime ? new Date(startTime).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          date: startDt.toISOString().split('T')[0],
           dayName: activeSession.name,
           durationDisplay: formatDuration(durationSeconds),
           durationSeconds: durationSeconds,
-          startTime: startTime ? formatTime(new Date(startTime)) : "00:00:00",
+          startTime: formatTime(startDt),
           endTime: formatTime(endTime),
           estimatedCalories: Math.round(totalTonnage * 0.05 + durationSeconds / 60 * 4),
           rating: rating,
@@ -806,8 +803,9 @@ export default function App() {
                   const parsed = JSON.parse(saved);
                   if (confirm(`Riprendere "${parsed.session.name}"?`)) {
                       setActiveSession(parsed.session);
+                      // Ripristina startTime come oggetto Date reale
                       setStartTime(new Date(parsed.startTime));
-                      setSessionTimer(parsed.timer || 0);
+                      // Non serve ripristinare il timer numerico, si ricalcola
                       setView('active-workout');
                   } else { clearLocalSession(); }
               } catch (e) { clearLocalSession(); }
@@ -821,32 +819,26 @@ export default function App() {
       }
   }, [activeDayId]);
 
+  // FIX TIMER: Calcola differenza reale ogni secondo
   useEffect(() => {
       let interval;
-      if (view === 'active-workout' && !finishModalOpen) {
-          interval = setInterval(() => { setSessionTimer(t => { const newVal = t + 1; if (newVal % 5 === 0 && activeSession) saveSessionLocally(activeSession); return newVal; }); }, 1000);
+      if (view === 'active-workout' && !finishModalOpen && startTime) {
+          const start = new Date(startTime).getTime();
+          interval = setInterval(() => { 
+              const now = Date.now();
+              const diff = Math.floor((now - start) / 1000);
+              setSessionTimer(diff);
+              // Salva stato ogni 10s
+              if (diff % 10 === 0 && activeSession) saveSessionLocally(activeSession); 
+          }, 1000);
       }
       return () => clearInterval(interval);
-  }, [view, finishModalOpen]);
+  }, [view, finishModalOpen, startTime]);
 
-  // Gestione Timer Riposo e Avanzamento Automatico
   useEffect(() => {
       let interval;
-      if (restTimer.isOpen && restTimer.timeLeft > 0) {
-          interval = setInterval(() => {
-              setRestTimer(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 }));
-          }, 1000);
-      } else if (restTimer.isOpen && restTimer.timeLeft <= 0) {
-          if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-          
-          setRestTimer(prev => ({ ...prev, isOpen: false }));
-          
-          // NUOVO: Avanzamento automatico a fine timer
-          if (restTimer.activeExerciseIndex !== null) {
-              // Rimaniamo sullo stesso esercizio, chiudendo il modale.
-              // L'utente è pronto per la prossima serie.
-          }
-      }
+      if (restTimer.isOpen && restTimer.timeLeft > 0) { interval = setInterval(() => { setRestTimer(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 })); }, 1000); }
+      else if (restTimer.isOpen && restTimer.timeLeft <= 0 && navigator.vibrate) { navigator.vibrate([200, 100, 200]); }
       return () => clearInterval(interval);
   }, [restTimer.isOpen, restTimer.timeLeft]);
 
@@ -920,9 +912,9 @@ export default function App() {
                         </div>
                         <div className="flex gap-2 text-xs font-mono">
                              <span className="text-green-400">Vol: {calculateCompletedVolume(activeSession)} kg</span>
-                             {lastSessionTonnage > 0 && (
+                             {maxSessionTonnage > 0 && (
                                 <span className="text-gray-500 border-l border-gray-700 pl-2">
-                                   Last: {lastSessionTonnage} kg
+                                   Max: {maxSessionTonnage} kg
                                 </span>
                              )}
                         </div>
