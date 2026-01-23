@@ -93,7 +93,7 @@ const firebaseConfig = {
   storageBucket: "training-c0b76.firebasestorage.app",
   messagingSenderId: "149618028951",
   appId: "1:149618028951:web:eca42664d47ab6d71954d2"
-};);
+};
 const safeConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
 
 const app = initializeApp(safeConfig);
