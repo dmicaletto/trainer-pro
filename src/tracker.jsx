@@ -102,7 +102,7 @@ const db = getFirestore(app);
 
 // ID App per la struttura del DB
 const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'training-c0b76';
-const APP_VERSION = "1.2.8";
+const APP_VERSION = "1.2.9";
 
 // --- DATI INIZIALI (Template Aggiornato) ---
 const INITIAL_WORKOUT_DAYS = {
