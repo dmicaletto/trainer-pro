@@ -54,7 +54,8 @@ import {
     Maximize2,
     Trash2,
     Plus,
-    StickyNote
+    StickyNote,
+    Shuffle
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -187,6 +188,34 @@ const INITIAL_WORKOUT_DAYS = {
     }
 };
 
+// --- CATALOGO ALLENAMENTO LIBERO ---
+const EXERCISE_GROUPS = {
+    'd1_e1': 'Petto', 'd1_e2': 'Petto', 'd1_e3': 'Petto', 'd1_e4': 'Petto', 'd1_e5': 'Petto',
+    'd1_e6': 'Tricipiti', 'd1_e7': 'Tricipiti',
+    'd1_e8': 'Core', 'd1_e9': 'Core',
+    'd2_e1': 'Gambe', 'd2_e2': 'Gambe', 'd2_e3': 'Gambe', 'd2_e4': 'Gambe',
+    'd2_e5': 'Spalle', 'd2_e6': 'Spalle', 'd2_e7': 'Spalle',
+    'd2_e8': 'Core', 'd2_e9': 'Core',
+    'd3_e1': 'Schiena', 'd3_e2': 'Schiena', 'd3_e3': 'Schiena', 'd3_e4': 'Schiena', 'd3_e7': 'Schiena',
+    'd3_e5': 'Bicipiti', 'd3_e6': 'Bicipiti',
+    'd3_e8': 'Core', 'd3_e9': 'Core',
+    'd4_e1': 'Petto', 'd4_e2': 'Petto', 'd4_e3': 'Petto',
+    'd4_e4': 'Spalle', 'd4_e5': 'Spalle', 'd4_e6': 'Spalle',
+    'd4_e7': 'Core', 'd4_e8': 'Core',
+};
+
+const MUSCLE_GROUP_ORDER = ['Petto', 'Tricipiti', 'Schiena', 'Bicipiti', 'Gambe', 'Spalle', 'Core'];
+
+const FREE_WORKOUT_CATALOG = Object.values(INITIAL_WORKOUT_DAYS)
+    .flatMap(day => day.exercises)
+    .filter((ex, idx, arr) => arr.findIndex(e => e.name === ex.name) === idx)
+    .map(ex => ({ ...ex, muscleGroup: EXERCISE_GROUPS[ex.id] || 'Altro' }))
+    .sort((a, b) => {
+        const ga = MUSCLE_GROUP_ORDER.indexOf(a.muscleGroup);
+        const gb = MUSCLE_GROUP_ORDER.indexOf(b.muscleGroup);
+        return ga !== gb ? ga - gb : a.name.localeCompare(b.name, 'it');
+    });
+
 const getImageUrl = (url, name) => {
     if (url && (url.startsWith('http') || url.startsWith('./'))) return url;
     return `https://placehold.co/600x400/1f2937/ffffff/png?text=${encodeURIComponent(name.toUpperCase())}`;
@@ -264,6 +293,7 @@ export default function App() {
     const [sessionTimer, setSessionTimer] = useState(0);
     const [startTime, setStartTime] = useState(null);
     const [maxSessionTonnage, setMaxSessionTonnage] = useState(0);
+    const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
 
     // UI States
     const [restTimer, setRestTimer] = useState({ isOpen: false, timeLeft: 0, totalTime: 0, activeExerciseIndex: null });
@@ -640,6 +670,41 @@ export default function App() {
         showToast("Serie aggiunta!", 'success');
     };
 
+    const handleStartFreeWorkout = async () => {
+        const freeSession = { name: "Allenamento Libero", exercises: [], isFree: true };
+        setActiveSession(freeSession);
+        setStartTime(new Date());
+        setMaxSessionTonnage(0);
+        setView('active-workout');
+        setFinishModalOpen(false);
+        setRating(0);
+        saveSessionLocally(freeSession);
+        showToast("Scegli i tuoi esercizi!", 'info');
+        if ('wakeLock' in navigator) {
+            try { wakeLockRef.current = await navigator.wakeLock.request('screen'); } catch (err) { console.error(err); }
+        }
+    };
+
+    const handleAddExerciseFromPicker = async (exercise) => {
+        const ex = JSON.parse(JSON.stringify(exercise));
+        if (user && !['mock-user', 'test-user'].includes(user.uid)) {
+            try {
+                const userDefaults = await fetchUserDefaults(user.uid);
+                if (userDefaults[ex.id]) {
+                    ex.sets = ex.sets.map((set, idx) => {
+                        const savedSet = userDefaults[ex.id][idx];
+                        return savedSet ? { ...set, weight: savedSet.weight ?? set.weight, reps: savedSet.reps ?? set.reps } : set;
+                    });
+                }
+            } catch (e) { /* usa i default del template */ }
+        }
+        const updatedSession = { ...activeSession, exercises: [...activeSession.exercises, ex] };
+        setActiveSession(updatedSession);
+        saveSessionLocally(updatedSession);
+        setExercisePickerOpen(false);
+        showToast(`${ex.name} aggiunto!`, 'success');
+    };
+
     const handleNoteEdit = (exerciseIndex) => {
         if (!activeSession) return;
         const note = activeSession.exercises[exerciseIndex].notes || "";
@@ -995,6 +1060,57 @@ export default function App() {
                 </div>
             )}
 
+            {/* EXERCISE PICKER MODAL */}
+            {exercisePickerOpen && activeSession?.isFree && (
+                <div className="fixed inset-0 z-[70] bg-gray-950 flex flex-col animate-in slide-in-from-bottom duration-300">
+                    <div className="flex items-center justify-between px-4 h-16 border-b border-gray-800 flex-shrink-0 bg-gray-950">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            <Dumbbell className="w-5 h-5 text-blue-500" /> Aggiungi Esercizio
+                        </h3>
+                        <button onClick={() => setExercisePickerOpen(false)} className="p-2 text-gray-400 hover:text-white bg-gray-800 rounded-full">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto">
+                        {(() => {
+                            const addedIds = new Set(activeSession.exercises.map(e => e.id));
+                            const available = FREE_WORKOUT_CATALOG.filter(ex => !addedIds.has(ex.id));
+                            if (available.length === 0) return (
+                                <div className="flex flex-col items-center justify-center h-full py-16 text-gray-500">
+                                    <CheckCircle2 className="w-12 h-12 mb-3 text-green-800" />
+                                    <p className="font-semibold">Tutti gli esercizi aggiunti!</p>
+                                </div>
+                            );
+                            return MUSCLE_GROUP_ORDER.map(group => {
+                                const groupExs = available.filter(ex => ex.muscleGroup === group);
+                                if (groupExs.length === 0) return null;
+                                return (
+                                    <div key={group}>
+                                        <div className="px-4 py-2 bg-gray-900/80 border-b border-gray-800 sticky top-0 z-10">
+                                            <span className="text-xs font-bold uppercase tracking-wider text-blue-400">{group}</span>
+                                        </div>
+                                        {groupExs.map(ex => (
+                                            <button
+                                                key={ex.id}
+                                                onClick={() => handleAddExerciseFromPicker(ex)}
+                                                className="w-full flex items-center gap-3 px-4 py-3 border-b border-gray-800/50 hover:bg-gray-800/50 active:bg-gray-800 transition-colors text-left"
+                                            >
+                                                <img src={getImageUrl(ex.imageUrl, ex.name)} alt={ex.name} className="w-12 h-12 object-cover rounded-xl flex-shrink-0 bg-gray-800" />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-white text-sm font-semibold truncate">{ex.name}</div>
+                                                    <div className="text-gray-500 text-xs mt-0.5">{ex.sets.length} serie · {ex.sets[0]?.weight}kg · {ex.rest}</div>
+                                                </div>
+                                                <Plus className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                                            </button>
+                                        ))}
+                                    </div>
+                                );
+                            });
+                        })()}
+                    </div>
+                </div>
+            )}
+
             {/* REST TIMER */}
             {restTimer.isOpen && (
                 <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-6 animate-in fade-in">
@@ -1072,11 +1188,19 @@ export default function App() {
                 {(view === 'dashboard' || view === 'active-workout') && (
                     <div className="animate-in fade-in duration-300">
                         {view === 'dashboard' && (
-                            <div className="grid grid-cols-2 gap-2 mb-4">
-                                {Object.keys(workoutData).map((dayId) => (
-                                    <button key={dayId} onClick={() => setActiveDayId(dayId)} className={`px-4 py-3 text-sm font-bold rounded-xl transition-all border ${activeDayId === dayId ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-gray-900 border-gray-800 text-gray-400'}`}>{workoutData[dayId].name.split(':')[0]}</button>
-                                ))}
-                            </div>
+                            <>
+                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                    {Object.keys(workoutData).map((dayId) => (
+                                        <button key={dayId} onClick={() => setActiveDayId(dayId)} className={`px-4 py-3 text-sm font-bold rounded-xl transition-all border ${activeDayId === dayId ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-gray-900 border-gray-800 text-gray-400'}`}>{workoutData[dayId].name.split(':')[0]}</button>
+                                    ))}
+                                </div>
+                                <button
+                                    onClick={handleStartFreeWorkout}
+                                    className="w-full px-4 py-3 mb-4 text-sm font-bold rounded-xl transition-all border border-dashed border-purple-700/60 bg-purple-900/10 text-purple-400 hover:bg-purple-900/20 flex items-center justify-center gap-2"
+                                >
+                                    <Shuffle className="w-4 h-4" /> Allenamento Libero
+                                </button>
+                            </>
                         )}
 
                         <div className="mb-6 flex justify-between items-end">
@@ -1145,8 +1269,25 @@ export default function App() {
                                     </div>
                                 </div>
                             ))}
+                            {view === 'active-workout' && activeSession.isFree && activeSession.exercises.length === 0 && (
+                                <div className="snap-center shrink-0 w-[95vw] sm:w-[400px] flex flex-col items-center justify-center py-24 text-center border-2 border-dashed border-gray-800 rounded-3xl bg-gray-900/50">
+                                    <div className="bg-gray-800 rounded-full p-5 mb-4">
+                                        <Shuffle className="w-10 h-10 text-gray-600" />
+                                    </div>
+                                    <p className="text-gray-500 font-semibold text-sm">Nessun esercizio</p>
+                                    <p className="text-gray-700 text-xs mt-1">Usa + per aggiungere dal catalogo</p>
+                                </div>
+                            )}
                             <div className="shrink-0 w-2"></div>
                         </div>
+
+                        {view === 'active-workout' && activeSession.isFree && (
+                            <div className="fixed bottom-6 left-6 z-30">
+                                <button onClick={() => setExercisePickerOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-full shadow-lg shadow-blue-900/40 flex items-center justify-center transform active:scale-95 transition-all">
+                                    <Plus className="w-8 h-8" />
+                                </button>
+                            </div>
+                        )}
 
                         {view === 'dashboard' ? (
                             <div className="fixed bottom-6 right-6 z-30">
@@ -1154,7 +1295,7 @@ export default function App() {
                             </div>
                         ) : (
                             <div className="fixed bottom-6 right-6 z-30">
-                                <button onClick={() => setFinishModalOpen(true)} className="bg-red-600 hover:bg-red-500 text-white p-4 rounded-full shadow-lg shadow-red-900/40 flex items-center justify-center transform active:scale-95 transition-all"><Save className="w-8 h-8" /></button>
+                                <button onClick={() => { if (activeSession.isFree && activeSession.exercises.length === 0) { showToast("Aggiungi almeno un esercizio!", 'error'); return; } setFinishModalOpen(true); }} className="bg-red-600 hover:bg-red-500 text-white p-4 rounded-full shadow-lg shadow-red-900/40 flex items-center justify-center transform active:scale-95 transition-all"><Save className="w-8 h-8" /></button>
                             </div>
                         )}
                     </div>
@@ -1200,7 +1341,12 @@ export default function App() {
                                     <div key={log.id} className="bg-gray-900 p-4 rounded-xl border border-gray-800 flex flex-col gap-3 hover:border-gray-700 transition-colors">
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <h3 className="font-bold text-white text-lg">{log.dayName}</h3>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h3 className="font-bold text-white text-lg">{log.dayName}</h3>
+                                                    {log.dayName === "Allenamento Libero" && (
+                                                        <span className="bg-purple-800/50 text-purple-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-purple-700/50 uppercase tracking-wide">LIBERO</span>
+                                                    )}
+                                                </div>
                                                 <p className="text-xs text-gray-500 capitalize">{new Date(log.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })} • {log.startTime}</p>
                                             </div>
                                             <div className="text-right">
