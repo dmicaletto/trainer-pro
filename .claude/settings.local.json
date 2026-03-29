@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"^\\(const|function|class|export|import|//\\)\\\\s+\\(App|export default|useState|useEffect|const [A-Z]\\)\" /c/Users/smartwk/GitHub/trainer-pro/src/tracker.jsx)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(where node)",
+      "Bash(where npx)",
+      "Bash(where npm)",
+      "Bash(ls C:/Users/smartwk/GitHub/trainer-pro/node_modules/.bin/vite*)",
+      "Bash(cmd /c \"dir C:\\\\Users\\\\smartwk\\\\GitHub\\\\trainer-pro\\\\node_modules /b 2>&1\")",
+      "Bash(npm install)"
+    ]
+  }
+}
