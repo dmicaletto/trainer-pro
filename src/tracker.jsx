@@ -55,7 +55,9 @@ import {
     Trash2,
     Plus,
     StickyNote,
-    Shuffle
+    Shuffle,
+    ArrowLeftRight,
+    Pencil
 } from 'lucide-react';
 
 // Chart.js Imports
@@ -294,6 +296,10 @@ export default function App() {
     const [startTime, setStartTime] = useState(null);
     const [maxSessionTonnage, setMaxSessionTonnage] = useState(0);
     const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
+    const [pickerFilterGroup, setPickerFilterGroup] = useState(null);
+    const [substituteExIndex, setSubstituteExIndex] = useState(null);
+    const [customExercises, setCustomExercises] = useState([]);
+    const [customExerciseModal, setCustomExerciseModal] = useState({ open: false, editingId: null, form: null });
 
     // UI States
     const [restTimer, setRestTimer] = useState({ isOpen: false, timeLeft: 0, totalTime: 0, activeExerciseIndex: null });
@@ -701,8 +707,130 @@ export default function App() {
         const updatedSession = { ...activeSession, exercises: [...activeSession.exercises, ex] };
         setActiveSession(updatedSession);
         saveSessionLocally(updatedSession);
-        setExercisePickerOpen(false);
+        closePicker();
         showToast(`${ex.name} aggiunto!`, 'success');
+    };
+
+    // --- CUSTOM EXERCISES ---
+    const isRealUser = (u) => u && !['mock-user', 'test-user'].includes(u.uid);
+
+    const fetchCustomExercises = async (userId) => {
+        try {
+            const snap = await getDocs(collection(db, `artifacts/${APP_ID}/users/${userId}/custom_exercises`));
+            return snap.docs.map(d => ({ ...d.data(), id: `custom_${d.id}`, _docId: d.id, isCustom: true }));
+        } catch (e) { console.error("Custom Ex fetch error:", e); return []; }
+    };
+
+    const buildSetsFromDefaults = (numSets, defaultReps, defaultWeight) =>
+        Array.from({ length: numSets }, () => ({ reps: Number(defaultReps), weight: Number(defaultWeight), completed: false }));
+
+    const saveCustomExercise = async () => {
+        if (!isRealUser(user)) { showToast("Funzione disponibile solo con account", 'error'); return; }
+        const f = customExerciseModal.form;
+        if (!f?.name?.trim()) { showToast("Inserisci un nome", 'error'); return; }
+        if (!f?.muscleGroup) { showToast("Seleziona un gruppo muscolare", 'error'); return; }
+
+        const payload = {
+            name: f.name.trim(),
+            muscleGroup: f.muscleGroup,
+            numSets: Number(f.numSets) || 4,
+            defaultReps: Number(f.defaultReps) || 10,
+            defaultWeight: Number(f.defaultWeight) || 20,
+            rest: `${Number(f.restSeconds) || 90}s`,
+            multiplier: Number(f.multiplier) || 1,
+            notes: f.notes || '',
+            technogymRef: f.technogymRef || null,
+            updatedAt: new Date().toISOString(),
+        };
+        try {
+            const collRef = collection(db, `artifacts/${APP_ID}/users/${user.uid}/custom_exercises`);
+            if (customExerciseModal.editingId) {
+                await setDoc(doc(collRef, customExerciseModal.editingId), sanitizeData(payload), { merge: true });
+                showToast("Esercizio aggiornato!", 'success');
+            } else {
+                await addDoc(collRef, sanitizeData(payload));
+                showToast("Esercizio creato!", 'success');
+            }
+            const updated = await fetchCustomExercises(user.uid);
+            setCustomExercises(updated);
+            setCustomExerciseModal({ open: false, editingId: null, form: null });
+        } catch (e) {
+            console.error("Custom Ex save error:", e);
+            showToast("Errore salvataggio", 'error');
+        }
+    };
+
+    const deleteCustomExercise = async (docId) => {
+        if (!isRealUser(user)) return;
+        if (!confirm("Eliminare questo esercizio?")) return;
+        try {
+            await deleteDoc(doc(db, `artifacts/${APP_ID}/users/${user.uid}/custom_exercises`, docId));
+            setCustomExercises(prev => prev.filter(c => c._docId !== docId));
+            showToast("Esercizio eliminato", 'success');
+        } catch (e) { console.error(e); showToast("Errore eliminazione", 'error'); }
+    };
+
+    const openCreateCustomExercise = (presetGroup = null) => {
+        if (!isRealUser(user)) { showToast("Disponibile solo con account", 'error'); return; }
+        setCustomExerciseModal({
+            open: true,
+            editingId: null,
+            form: {
+                name: '', muscleGroup: presetGroup || '', numSets: 4, defaultReps: 10,
+                defaultWeight: 20, restSeconds: 90, multiplier: 1, notes: '', technogymRef: null,
+            }
+        });
+    };
+
+    const openEditCustomExercise = (custom) => {
+        setCustomExerciseModal({
+            open: true,
+            editingId: custom._docId,
+            form: {
+                name: custom.name,
+                muscleGroup: custom.muscleGroup,
+                numSets: custom.numSets || (custom.sets?.length ?? 4),
+                defaultReps: custom.defaultReps || custom.sets?.[0]?.reps || 10,
+                defaultWeight: custom.defaultWeight || custom.sets?.[0]?.weight || 20,
+                restSeconds: parseRestTime(custom.rest),
+                multiplier: custom.multiplier || 1,
+                notes: custom.notes || '',
+                technogymRef: custom.technogymRef || null,
+            }
+        });
+    };
+
+    // Materializza un custom exercise (con sets generati) per il picker / sessione
+    const materializeCustomExercise = (custom) => ({
+        id: custom.id,
+        name: custom.name,
+        muscleGroup: custom.muscleGroup,
+        sets: buildSetsFromDefaults(custom.numSets || 4, custom.defaultReps || 10, custom.defaultWeight || 20),
+        rest: custom.rest || '90s',
+        multiplier: custom.multiplier || 1,
+        imageUrl: '',
+        notes: custom.notes || '',
+        isCustom: true,
+    });
+
+    const openPickerForAdd = () => {
+        setPickerFilterGroup(null);
+        setSubstituteExIndex(null);
+        setExercisePickerOpen(true);
+    };
+
+    const openPickerForSubstitute = (exIndex) => {
+        const ex = activeSession.exercises[exIndex];
+        const group = ex.isCustom ? ex.muscleGroup : (EXERCISE_GROUPS[ex.id] || null);
+        setPickerFilterGroup(group);
+        setSubstituteExIndex(exIndex);
+        setExercisePickerOpen(true);
+    };
+
+    const closePicker = () => {
+        setExercisePickerOpen(false);
+        setPickerFilterGroup(null);
+        setSubstituteExIndex(null);
     };
 
     const handleNoteEdit = (exerciseIndex) => {
@@ -890,7 +1018,14 @@ export default function App() {
     }, []);
 
     useEffect(() => {
-        if (user) fetchUserProfile(user.uid);
+        if (user) {
+            fetchUserProfile(user.uid);
+            if (isRealUser(user)) {
+                fetchCustomExercises(user.uid).then(setCustomExercises);
+            } else {
+                setCustomExercises([]);
+            }
+        }
     }, [user]);
 
     useEffect(() => {
@@ -1061,51 +1196,168 @@ export default function App() {
             )}
 
             {/* EXERCISE PICKER MODAL */}
-            {exercisePickerOpen && activeSession?.isFree && (
+            {exercisePickerOpen && activeSession && (
                 <div className="fixed inset-0 z-[70] bg-gray-950 flex flex-col animate-in slide-in-from-bottom duration-300">
                     <div className="flex items-center justify-between px-4 h-16 border-b border-gray-800 flex-shrink-0 bg-gray-950">
-                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                            <Dumbbell className="w-5 h-5 text-blue-500" /> Aggiungi Esercizio
-                        </h3>
-                        <button onClick={() => setExercisePickerOpen(false)} className="p-2 text-gray-400 hover:text-white bg-gray-800 rounded-full">
+                        <div className="flex flex-col">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                {substituteExIndex !== null
+                                    ? <><ArrowLeftRight className="w-5 h-5 text-orange-400" /> Sostituisci Esercizio</>
+                                    : <><Dumbbell className="w-5 h-5 text-blue-500" /> Aggiungi Esercizio</>}
+                            </h3>
+                            {pickerFilterGroup && (
+                                <span className="text-[10px] text-gray-500 uppercase tracking-wider">Filtro: {pickerFilterGroup}</span>
+                            )}
+                        </div>
+                        <button onClick={closePicker} className="p-2 text-gray-400 hover:text-white bg-gray-800 rounded-full">
                             <X className="w-5 h-5" />
                         </button>
                     </div>
                     <div className="flex-1 overflow-y-auto">
                         {(() => {
                             const addedIds = new Set(activeSession.exercises.map(e => e.id));
-                            const available = FREE_WORKOUT_CATALOG.filter(ex => !addedIds.has(ex.id));
-                            if (available.length === 0) return (
-                                <div className="flex flex-col items-center justify-center h-full py-16 text-gray-500">
-                                    <CheckCircle2 className="w-12 h-12 mb-3 text-green-800" />
-                                    <p className="font-semibold">Tutti gli esercizi aggiunti!</p>
+                            const customMaterialized = customExercises.map(materializeCustomExercise);
+                            const merged = [...FREE_WORKOUT_CATALOG, ...customMaterialized];
+                            const available = merged.filter(ex =>
+                                !addedIds.has(ex.id) &&
+                                (!pickerFilterGroup || ex.muscleGroup === pickerFilterGroup)
+                            );
+                            const groupsToShow = pickerFilterGroup ? [pickerFilterGroup] : MUSCLE_GROUP_ORDER;
+                            const customMap = new Map(customExercises.map(c => [`custom_${c._docId}`, c]));
+
+                            return (
+                                <>
+                                    {available.length === 0 && (
+                                        <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+                                            <CheckCircle2 className="w-12 h-12 mb-3 text-green-800" />
+                                            <p className="font-semibold">Nessun esercizio disponibile</p>
+                                        </div>
+                                    )}
+                                    {groupsToShow.map(group => {
+                                        const groupExs = available.filter(ex => ex.muscleGroup === group);
+                                        if (groupExs.length === 0) return null;
+                                        return (
+                                            <div key={group}>
+                                                <div className="px-4 py-2 bg-gray-900/80 border-b border-gray-800 sticky top-0 z-10">
+                                                    <span className="text-xs font-bold uppercase tracking-wider text-blue-400">{group}</span>
+                                                </div>
+                                                {groupExs.map(ex => {
+                                                    const isCustom = ex.isCustom;
+                                                    const customSrc = isCustom ? customMap.get(ex.id) : null;
+                                                    return (
+                                                        <div key={ex.id} className="flex items-center gap-2 px-4 py-3 border-b border-gray-800/50 hover:bg-gray-800/50 transition-colors">
+                                                            <button
+                                                                onClick={() => handleAddExerciseFromPicker(ex)}
+                                                                className="flex-1 flex items-center gap-3 text-left min-w-0"
+                                                            >
+                                                                <img src={getImageUrl(ex.imageUrl, ex.name)} alt={ex.name} className="w-12 h-12 object-cover rounded-xl flex-shrink-0 bg-gray-800" />
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="text-white text-sm font-semibold truncate flex items-center gap-1.5">
+                                                                        {ex.name}
+                                                                        {isCustom && <span className="text-[8px] bg-purple-700/60 text-purple-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Custom</span>}
+                                                                        {ex.multiplier > 1 && <span className="text-[8px] bg-yellow-500 text-black px-1 rounded font-extrabold">x{ex.multiplier}</span>}
+                                                                    </div>
+                                                                    <div className="text-gray-500 text-xs mt-0.5">{ex.sets.length} serie · {ex.sets[0]?.weight}kg · {ex.rest}</div>
+                                                                </div>
+                                                                <Plus className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                                                            </button>
+                                                            {isCustom && customSrc && (
+                                                                <div className="flex items-center gap-1 flex-shrink-0">
+                                                                    <button onClick={() => openEditCustomExercise(customSrc)} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg" title="Modifica">
+                                                                        <Pencil className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button onClick={() => deleteCustomExercise(customSrc._docId)} className="p-2 text-red-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg" title="Elimina">
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })}
+                                    {isRealUser(user) && (
+                                        <button
+                                            onClick={() => openCreateCustomExercise(pickerFilterGroup)}
+                                            className="w-full flex items-center justify-center gap-2 px-4 py-4 m-4 border-2 border-dashed border-purple-700/60 bg-purple-900/10 text-purple-400 hover:bg-purple-900/20 rounded-2xl font-bold text-sm"
+                                            style={{ width: 'calc(100% - 2rem)' }}
+                                        >
+                                            <Plus className="w-5 h-5" /> Crea Nuovo Esercizio
+                                        </button>
+                                    )}
+                                </>
+                            );
+                        })()}
+                    </div>
+                </div>
+            )}
+
+            {/* CUSTOM EXERCISE FORM MODAL */}
+            {customExerciseModal.open && (
+                <div className="fixed inset-0 z-[80] bg-black/95 flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in">
+                    <div className="w-full max-w-md bg-gray-900 rounded-t-2xl sm:rounded-2xl border border-gray-800 p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+                        <button onClick={() => setCustomExerciseModal({ open: false, editingId: null, form: null })} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            {customExerciseModal.editingId ? <><Pencil className="w-5 h-5 text-purple-400" /> Modifica Esercizio</> : <><Plus className="w-5 h-5 text-purple-400" /> Nuovo Esercizio</>}
+                        </h3>
+                        {(() => {
+                            const f = customExerciseModal.form;
+                            const upd = (k, v) => setCustomExerciseModal(prev => ({ ...prev, form: { ...prev.form, [k]: v } }));
+                            const inputCls = "w-full bg-gray-950 border border-gray-700 rounded-xl px-3 py-2 text-white focus:border-blue-500 focus:outline-none";
+                            const labelCls = "block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1";
+                            return (
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className={labelCls}>Nome esercizio *</label>
+                                        <input type="text" value={f.name} onChange={(e) => upd('name', e.target.value)} className={inputCls} placeholder="Es. Pectoral Machine" />
+                                    </div>
+                                    <div>
+                                        <label className={labelCls}>Gruppo muscolare *</label>
+                                        <select value={f.muscleGroup} onChange={(e) => upd('muscleGroup', e.target.value)} className={inputCls}>
+                                            <option value="">Seleziona...</option>
+                                            {MUSCLE_GROUP_ORDER.map(g => <option key={g} value={g}>{g}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div>
+                                            <label className={labelCls}>Serie</label>
+                                            <input type="number" min="1" max="10" value={f.numSets} onChange={(e) => upd('numSets', e.target.value)} className={inputCls} />
+                                        </div>
+                                        <div>
+                                            <label className={labelCls}>Reps</label>
+                                            <input type="number" min="1" value={f.defaultReps} onChange={(e) => upd('defaultReps', e.target.value)} className={inputCls} />
+                                        </div>
+                                        <div>
+                                            <label className={labelCls}>Peso (kg)</label>
+                                            <input type="number" min="0" value={f.defaultWeight} onChange={(e) => upd('defaultWeight', e.target.value)} className={inputCls} />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className={labelCls}>Recupero (s)</label>
+                                            <input type="number" min="0" value={f.restSeconds} onChange={(e) => upd('restSeconds', e.target.value)} className={inputCls} />
+                                        </div>
+                                        <div>
+                                            <label className={labelCls}>Moltiplicatore</label>
+                                            <select value={f.multiplier} onChange={(e) => upd('multiplier', e.target.value)} className={inputCls}>
+                                                <option value="1">x1</option>
+                                                <option value="2">x2</option>
+                                                <option value="3">x3</option>
+                                                <option value="4">x4</option>
+                                                <option value="5">x5</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className={labelCls}>Note (opzionale)</label>
+                                        <textarea value={f.notes} onChange={(e) => upd('notes', e.target.value)} className={`${inputCls} h-16 resize-none`} />
+                                    </div>
+                                    <button onClick={saveCustomExercise} className="w-full py-3 mt-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2">
+                                        <Save className="w-4 h-4" /> {customExerciseModal.editingId ? 'Aggiorna' : 'Crea'}
+                                    </button>
                                 </div>
                             );
-                            return MUSCLE_GROUP_ORDER.map(group => {
-                                const groupExs = available.filter(ex => ex.muscleGroup === group);
-                                if (groupExs.length === 0) return null;
-                                return (
-                                    <div key={group}>
-                                        <div className="px-4 py-2 bg-gray-900/80 border-b border-gray-800 sticky top-0 z-10">
-                                            <span className="text-xs font-bold uppercase tracking-wider text-blue-400">{group}</span>
-                                        </div>
-                                        {groupExs.map(ex => (
-                                            <button
-                                                key={ex.id}
-                                                onClick={() => handleAddExerciseFromPicker(ex)}
-                                                className="w-full flex items-center gap-3 px-4 py-3 border-b border-gray-800/50 hover:bg-gray-800/50 active:bg-gray-800 transition-colors text-left"
-                                            >
-                                                <img src={getImageUrl(ex.imageUrl, ex.name)} alt={ex.name} className="w-12 h-12 object-cover rounded-xl flex-shrink-0 bg-gray-800" />
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-white text-sm font-semibold truncate">{ex.name}</div>
-                                                    <div className="text-gray-500 text-xs mt-0.5">{ex.sets.length} serie · {ex.sets[0]?.weight}kg · {ex.rest}</div>
-                                                </div>
-                                                <Plus className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                                            </button>
-                                        ))}
-                                    </div>
-                                );
-                            });
                         })()}
                     </div>
                 </div>
@@ -1263,6 +1515,15 @@ export default function App() {
                                                     >
                                                         <StickyNote className={`w-3 h-3 ${exercise.notes ? 'fill-yellow-400' : ''}`} /> {exercise.notes ? 'Vedi Nota' : 'Aggiungi Nota'}
                                                     </button>
+                                                    {isRealUser(user) && (
+                                                        <button
+                                                            onClick={() => openPickerForSubstitute(exIndex)}
+                                                            className="flex items-center gap-1 text-xs font-semibold border border-orange-900/50 text-orange-400 hover:bg-orange-900/20 px-3 py-1.5 rounded-full transition-all"
+                                                            title="Sostituisci con un altro esercizio dello stesso gruppo"
+                                                        >
+                                                            <ArrowLeftRight className="w-3 h-3" /> Sostituisci
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
